@@ -1,0 +1,80 @@
+name: Consolidate Full 18,400+ Match Unfiltered Lake
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  consolidate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download Delta Batches (iam-Hemanth/cricket-lake-unfiltered)
+        run: |
+          set -euo pipefail
+          mkdir -p delta_archives
+          mkdir -p master_all_matches
+          echo "Downloading 52 delta batch archives..."
+          gh release download data-unfiltered-batches -p "matches_batch_*.tar.gz" --dir delta_archives
+
+          for arch in delta_archives/matches_batch_*.tar.gz; do
+            echo "Unpacking $arch..."
+            tar -xzf "$arch" -C master_all_matches
+          done
+          DELTA_COUNT=$(find master_all_matches -name "*.json" ! -name "failed_matches.json" | wc -l | tr -d ' ')
+          echo "Unpacked $DELTA_COUNT delta matches."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Curated Lake (iam-Hemanth/cricket-extractor)
+        run: |
+          set -euo pipefail
+          mkdir -p curated_lake
+          echo "Downloading cricket_lake_v3.tar.gz from iam-Hemanth/cricket-extractor..."
+          gh release download data-v2-batches --repo iam-Hemanth/cricket-extractor -p "cricket_lake_v3.tar.gz" --dir curated_lake
+
+          echo "Unpacking curated matches into master_all_matches..."
+          tar -xzf curated_lake/cricket_lake_v3.tar.gz -C master_all_matches
+
+          TOTAL_COUNT=$(find master_all_matches -name "*.json" ! -name "failed_matches.json" ! -name "lake_manifest.json" | wc -l | tr -d ' ')
+          echo "Total unique matches ready for consolidation: $TOTAL_COUNT"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Consolidate Master Lake & Generate Manifest
+        run: |
+          python consolidate.py \
+            --input-dirs master_all_matches \
+            --output-dir master_unfiltered_lake/matches \
+            --manifest-path master_unfiltered_lake/lake_manifest.json \
+            --archive-path master_unfiltered_lake/cricket_lake_unfiltered_master.tar.gz
+
+      - name: Display Lake Summary
+        run: |
+          cat master_unfiltered_lake/lake_manifest.json
+          echo "### 🏏 Unfiltered Master Cricket Data Lake Summary (18,400+ Matches)" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat master_unfiltered_lake/lake_manifest.json >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Master Unfiltered Lake Assets to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: data-unfiltered-master
+          files: |
+            master_unfiltered_lake/cricket_lake_unfiltered_master.tar.gz
+            master_unfiltered_lake/lake_manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
