@@ -58,8 +58,14 @@ jobs:
           python consolidate.py \
             --input-dirs master_all_matches \
             --output-dir master_unfiltered_lake/matches \
-            --manifest-path master_unfiltered_lake/lake_manifest.json \
-            --archive-path master_unfiltered_lake/cricket_lake_unfiltered_master.tar.gz
+            --manifest-path master_unfiltered_lake/lake_manifest.json
+
+      - name: Build Index Catalog & Distribution Archives
+        run: |
+          python scripts/build_lake_catalog.py \
+            --matches-dir master_unfiltered_lake/matches \
+            --output-dir master_unfiltered_lake/dist \
+            --archive-prefix cricket_lake_unfiltered_master
 
       - name: Display Lake Summary
         run: |
@@ -74,7 +80,10 @@ jobs:
         with:
           tag_name: data-unfiltered-master
           files: |
-            master_unfiltered_lake/cricket_lake_unfiltered_master.tar.gz
+            master_unfiltered_lake/dist/cricket_lake_unfiltered_master.zip
+            master_unfiltered_lake/dist/cricket_lake_unfiltered_master.tar.gz
+            master_unfiltered_lake/dist/matches_index.csv
+            master_unfiltered_lake/dist/README.txt
             master_unfiltered_lake/lake_manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
