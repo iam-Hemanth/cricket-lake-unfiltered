@@ -1,0 +1,69 @@
+name: Extract October Delta Matches (Batches 52 to 56)
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: 'Number of matches per batch'
+        required: true
+        default: '40'
+      delay:
+        description: 'Delay between requests in seconds'
+        required: false
+        default: '0.2'
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        batch_config:
+          - { release_idx: 52, manifest_idx: 0 }
+          - { release_idx: 53, manifest_idx: 1 }
+          - { release_idx: 54, manifest_idx: 2 }
+          - { release_idx: 55, manifest_idx: 3 }
+          - { release_idx: 56, manifest_idx: 4 }
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Extract Batch Matches
+        run: |
+          set -euo pipefail
+          mkdir -p output_batch_${{ matrix.batch_config.release_idx }}
+          mkdir -p raw_batch_${{ matrix.batch_config.release_idx }}
+          python extract.py \
+            --manifest data/manifest_unfiltered_delta.json \
+            --batch-index ${{ matrix.batch_config.manifest_idx }} \
+            --batch-size ${{ github.event.inputs.batch_size || 40 }} \
+            --delay ${{ github.event.inputs.delay || 0.2 }} \
+            --output-dir output_batch_${{ matrix.batch_config.release_idx }} \
+            --raw-dir raw_batch_${{ matrix.batch_config.release_idx }}
+
+          tar -czf matches_batch_${{ matrix.batch_config.release_idx }}.tar.gz -C output_batch_${{ matrix.batch_config.release_idx }} .
+          tar -czf raw_batch_${{ matrix.batch_config.release_idx }}.tar.gz -C raw_batch_${{ matrix.batch_config.release_idx }} .
+        env:
+          AKAMAI_KEY: ${{ secrets.AKAMAI_KEY }}
+
+      - name: Upload Batch Archives to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: data-unfiltered-batches
+          files: |
+            matches_batch_${{ matrix.batch_config.release_idx }}.tar.gz
+            raw_batch_${{ matrix.batch_config.release_idx }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

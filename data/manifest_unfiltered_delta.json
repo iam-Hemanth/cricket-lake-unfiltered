@@ -1,0 +1,2446 @@
+[
+  {
+    "match_id": "1530204",
+    "teams": [
+      "Zimbabwe",
+      "Australia"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-18",
+    "winner": "Australia",
+    "result": "84 runs",
+    "competition": null
+  },
+  {
+    "match_id": "1534216",
+    "teams": [
+      "Amazon",
+      "Kingsmen"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-18",
+    "winner": "Kingsmen",
+    "result": "5 wickets",
+    "competition": null
+  },
+  {
+    "match_id": "1552924",
+    "teams": [
+      "Kenya",
+      "Uganda"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-18",
+    "winner": "Uganda",
+    "result": "47 runs",
+    "competition": null
+  },
+  {
+    "match_id": "1552925",
+    "teams": [
+      "Botswana",
+      "Sierra Leone"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-18",
+    "winner": "Botswana",
+    "result": "21 runs",
+    "competition": null
+  },
+  {
+    "match_id": "1496587",
+    "teams": [
+      "England",
+      "Sri Lanka"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-19",
+    "winner": "England",
+    "result": "8 wickets",
+    "competition": null
+  },
+  {
+    "match_id": "1544843",
+    "teams": [
+      "Queensland",
+      "Victoria"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-19",
+    "winner": "Victoria",
+    "result": "3 wickets",
+    "competition": null
+  },
+  {
+    "match_id": "1547902",
+    "teams": [
+      "Wolves",
+      "Flames"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-19",
+    "winner": "Wolves",
+    "result": "7 wickets",
+    "competition": null
+  },
+  {
+    "match_id": "1552306",
+    "teams": [
+      "Japan",
+      "Hong Kong"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-19",
+    "winner": "Hong Kong",
+    "result": "4 wickets",
+    "competition": null
+  },
+  {
+    "match_id": "1552926",
+    "teams": [
+      "Kenya",
+      "Uganda"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-19",
+    "winner": "Kenya",
+    "result": "39 runs",
+    "competition": null
+  },
+  {
+    "match_id": "1513528",
+    "teams": [
+      "Leics",
+      "Middlesex"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-20",
+    "winner": "Middlesex",
+    "result": "31 runs",
+    "competition": null
+  },
+  {
+    "match_id": "1530205",
+    "teams": [
+      "Zimbabwe",
+      "Australia"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-20",
+    "winner": "Australia",
+    "result": "1 wicket",
+    "competition": null
+  },
+  {
+    "match_id": "1534217",
+    "teams": [
+      "Falcons",
+      "Kingsmen"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-20",
+    "winner": "Falcons",
+    "result": "8 wickets",
+    "competition": null
+  },
+  {
+    "match_id": "1544844",
+    "teams": [
+      "West Aust",
+      "Tasmania"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-20",
+    "winner": "Tasmania",
+    "result": "9 wickets",
+    "competition": null
+  },
+  {
+    "match_id": "1547903",
+    "teams": [
+      "Wolves",
+      "Rockers"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-20",
+    "winner": "Rockers",
+    "result": "7 wickets",
+    "competition": null
+  },
+  {
+    "match_id": "1551793",
+    "teams": [
+      "Easterns",
+      "Border"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-20",
+    "winner": "Easterns",
+    "result": "7 wickets",
+    "competition": null
+  },
+  {
+    "match_id": "1551794",
+    "teams": [
+      "Mpumalanga",
+      "S West D"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-20",
+    "winner": "S West D",
+    "result": "157 runs",
+    "competition": null
+  },
+  {
+    "match_id": "1554583",
+    "teams": [
+      "Nigeria",
+      "Ghana"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-21",
+    "winner": "Nigeria",
+    "result": "8 wickets",
+    "competition": null
+  },
+  {
+    "match_id": "1496588",
+    "teams": [
+      "England",
+      "Sri Lanka"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-22",
+    "winner": "England",
+    "result": "89 runs",
+    "competition": "Sri Lanka tour of England"
+  },
+  {
+    "match_id": "1535672",
+    "teams": [
+      "India A",
+      "Australia A"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-22",
+    "winner": null,
+    "result": "India A won by 162 runs",
+    "competition": "Australia A tour of India"
+  },
+  {
+    "match_id": "1544845",
+    "teams": [
+      "Queensland",
+      "NSW"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-22",
+    "winner": "NSW",
+    "result": "4 wickets",
+    "competition": "One-Day Cup (Australia)"
+  },
+  {
+    "match_id": "1550480",
+    "teams": [
+      "PAK Women",
+      "BAN Women"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-22",
+    "winner": null,
+    "result": "PAK Women won by 31 runs",
+    "competition": "Asian Games Women's Cricket Competition"
+  },
+  {
+    "match_id": "1550481",
+    "teams": [
+      "IND Women",
+      "SL Women"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-22",
+    "winner": null,
+    "result": "IND Women won by 147 runs",
+    "competition": "Asian Games Women's Cricket Competition"
+  },
+  {
+    "match_id": "1551340",
+    "teams": [
+      "Pamir",
+      "Maiwand"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-22",
+    "winner": null,
+    "result": "Maiwand won by an innings and 41 runs",
+    "competition": "Ahmad Shah Abdali 4-day Tournament"
+  },
+  {
+    "match_id": "1551341",
+    "teams": [
+      "Hindukush",
+      "Mah-e-Par"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-22",
+    "winner": null,
+    "result": "Mah-e-Par won by an innings and 141 runs",
+    "competition": "Ahmad Shah Abdali 4-day Tournament"
+  },
+  {
+    "match_id": "1552859",
+    "teams": [
+      "Japan",
+      "India"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-22",
+    "winner": "India",
+    "result": "2 runs",
+    "competition": "India tour of Japan"
+  },
+  {
+    "match_id": "1554585",
+    "teams": [
+      "Ghana",
+      "Sierra Leone"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-22",
+    "winner": "Sierra Leone",
+    "result": "6 wickets",
+    "competition": "Nigeria Quadrangular T20 Series"
+  },
+  {
+    "match_id": "1554586",
+    "teams": [
+      "Nigeria A",
+      "Nigeria"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-22",
+    "winner": null,
+    "result": "Nigeria A won by 19 runs",
+    "competition": "Nigeria Quadrangular T20 Series"
+  },
+  {
+    "match_id": "1535683",
+    "teams": [
+      "AUS Under-19",
+      "IND Under-19"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-23",
+    "winner": null,
+    "result": "IND Under-19 won by 6 wickets (with 52 balls remaining)",
+    "competition": "Australia Under-19s tour of India"
+  },
+  {
+    "match_id": "1544846",
+    "teams": [
+      "South Aust",
+      "Tasmania"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-23",
+    "winner": "South Aust",
+    "result": "7 runs",
+    "competition": "One-Day Cup (Australia)"
+  },
+  {
+    "match_id": "1552025",
+    "teams": [
+      "IND-A Women",
+      "AUS-A Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-23",
+    "winner": null,
+    "result": "AUS-A Women won by 2 wickets (with 3 balls remaining)",
+    "competition": "Australia A Women tour of India"
+  },
+  {
+    "match_id": "1552797",
+    "teams": [
+      "Cayman",
+      "Bermuda"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-23",
+    "winner": "Bermuda",
+    "result": "10 wickets",
+    "competition": "North America Cup"
+  },
+  {
+    "match_id": "1554587",
+    "teams": [
+      "Nigeria",
+      "Sierra Leone"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-23",
+    "winner": null,
+    "result": "Match abandoned without a ball bowled",
+    "competition": "Nigeria Quadrangular T20 Series"
+  },
+  {
+    "match_id": "1554588",
+    "teams": [
+      "Ghana",
+      "Nigeria A"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-23",
+    "winner": null,
+    "result": "Nigeria A won by 8 wickets (with 49 balls remaining)",
+    "competition": "Nigeria Quadrangular T20 Series"
+  },
+  {
+    "match_id": "1555255",
+    "teams": [
+      "Chile (W)",
+      "Brazil A W"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-23",
+    "winner": null,
+    "result": "Brazil A W won by 9 wickets (with 90 balls remaining)",
+    "competition": "South American Women's Championships"
+  },
+  {
+    "match_id": "1555256",
+    "teams": [
+      "Chile (W)",
+      "CRC-W"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-23",
+    "winner": null,
+    "result": "CRC-W won by 9 wickets (with 20 balls remaining)",
+    "competition": "South American Women's Championships"
+  },
+  {
+    "match_id": "1555386",
+    "teams": [
+      "Cayman",
+      "Bermuda"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-23",
+    "winner": "Cayman",
+    "result": "2 wickets",
+    "competition": "North America Cup"
+  },
+  {
+    "match_id": "1496589",
+    "teams": [
+      "England",
+      "Sri Lanka"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": "Sri Lanka",
+    "result": "16 runs",
+    "competition": "Sri Lanka tour of England"
+  },
+  {
+    "match_id": "1513391",
+    "teams": [
+      "Leics",
+      "Warwickshire"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Warwickshire won by an innings and 79 runs",
+    "competition": "County Championship Division One"
+  },
+  {
+    "match_id": "1513392",
+    "teams": [
+      "Notts",
+      "Yorkshire"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Yorkshire won by 1 wicket",
+    "competition": "County Championship Division One"
+  },
+  {
+    "match_id": "1513393",
+    "teams": [
+      "Sussex",
+      "Hampshire"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Sussex won by 197 runs",
+    "competition": "County Championship Division One"
+  },
+  {
+    "match_id": "1513394",
+    "teams": [
+      "Glamorgan",
+      "Essex"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Match drawn",
+    "competition": "County Championship Division One"
+  },
+  {
+    "match_id": "1513395",
+    "teams": [
+      "Surrey",
+      "Somerset"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Match drawn",
+    "competition": "County Championship Division One"
+  },
+  {
+    "match_id": "1513448",
+    "teams": [
+      "Gloucs",
+      "Kent"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Kent won by 8 wickets",
+    "competition": "County Championship Division Two"
+  },
+  {
+    "match_id": "1513449",
+    "teams": [
+      "Northants",
+      "Middlesex"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Middlesex won by 7 wickets",
+    "competition": "County Championship Division Two"
+  },
+  {
+    "match_id": "1513450",
+    "teams": [
+      "Worcs",
+      "Derbyshire"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Worcs won by 175 runs",
+    "competition": "County Championship Division Two"
+  },
+  {
+    "match_id": "1513451",
+    "teams": [
+      "Durham",
+      "Lancashire"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Match drawn",
+    "competition": "County Championship Division Two"
+  },
+  {
+    "match_id": "1525655",
+    "teams": [
+      "South Africa",
+      "Australia"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": "South Africa",
+    "result": "67 runs",
+    "competition": "Australia tour of South Africa"
+  },
+  {
+    "match_id": "1552766",
+    "teams": [
+      "Japan",
+      "Afghanistan"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": "Afghanistan",
+    "result": "48 runs",
+    "competition": "Asian Games Men's Cricket Competition"
+  },
+  {
+    "match_id": "1552767",
+    "teams": [
+      "Hong Kong",
+      "Malaysia"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": "Malaysia",
+    "result": "8 wickets",
+    "competition": "Asian Games Men's Cricket Competition"
+  },
+  {
+    "match_id": "1552795",
+    "teams": [
+      "Cayman",
+      "Bahamas"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": "Cayman",
+    "result": "131 runs",
+    "competition": "North America Cup"
+  },
+  {
+    "match_id": "1552798",
+    "teams": [
+      "Cayman",
+      "Bahamas"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "No result (abandoned with a toss)",
+    "competition": "North America Cup"
+  },
+  {
+    "match_id": "1553785",
+    "teams": [
+      "Ghani",
+      "State B of P"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "State B of P won by an innings and 18 runs",
+    "competition": "President's Trophy Grade-I"
+  },
+  {
+    "match_id": "1553786",
+    "teams": [
+      "Khan RL",
+      "Oil & Gas"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Match drawn",
+    "competition": "President's Trophy Grade-I"
+  },
+  {
+    "match_id": "1553787",
+    "teams": [
+      "Markhor IT",
+      "Sui Northern"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Match drawn",
+    "competition": "President's Trophy Grade-I"
+  },
+  {
+    "match_id": "1553788",
+    "teams": [
+      "Pakistan TV",
+      "Kingsmen"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Kingsmen won by 10 wickets",
+    "competition": "President's Trophy Grade-I"
+  },
+  {
+    "match_id": "1554975",
+    "teams": [
+      "WI Women",
+      "ZIM Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "WI Women won by 99 runs",
+    "competition": "West Indies Women tour of Zimbabwe"
+  },
+  {
+    "match_id": "1555257",
+    "teams": [
+      "Brazil A W",
+      "CRC-W"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Brazil A W won by 95 runs",
+    "competition": "South American Women's Championships"
+  },
+  {
+    "match_id": "1555258",
+    "teams": [
+      "Brazil A W",
+      "Chile (W)"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-24",
+    "winner": null,
+    "result": "Brazil A W won by 108 runs",
+    "competition": "South American Women's Championships"
+  },
+  {
+    "match_id": "1544847",
+    "teams": [
+      "Victoria",
+      "NSW"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-25",
+    "winner": "NSW",
+    "result": "47 runs",
+    "competition": "One-Day Cup (Australia)"
+  },
+  {
+    "match_id": "1551833",
+    "teams": [
+      "Warriors",
+      "North West"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-25",
+    "winner": "North West",
+    "result": "7 wickets",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1551834",
+    "teams": [
+      "Titans",
+      "W Province"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-25",
+    "winner": "Titans",
+    "result": "5 wickets",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1552026",
+    "teams": [
+      "AUS-A Women",
+      "IND-A Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-25",
+    "winner": null,
+    "result": "IND-A Women won by 4 wickets (with 10 balls remaining)",
+    "competition": "Australia A Women tour of India"
+  },
+  {
+    "match_id": "1552768",
+    "teams": [
+      "Hong Kong",
+      "Oman"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-25",
+    "winner": "Hong Kong",
+    "result": "41 runs",
+    "competition": "Asian Games Men's Cricket Competition"
+  },
+  {
+    "match_id": "1552769",
+    "teams": [
+      "Afghanistan",
+      "Nepal"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-25",
+    "winner": "Nepal",
+    "result": "5 wickets",
+    "competition": "Asian Games Men's Cricket Competition"
+  },
+  {
+    "match_id": "1552796",
+    "teams": [
+      "Bahamas",
+      "Bermuda"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-25",
+    "winner": null,
+    "result": "Match abandoned without a ball bowled",
+    "competition": "North America Cup"
+  },
+  {
+    "match_id": "1552799",
+    "teams": [
+      "Bahamas",
+      "Bermuda"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-25",
+    "winner": null,
+    "result": "Match abandoned without a ball bowled",
+    "competition": "North America Cup"
+  },
+  {
+    "match_id": "1554589",
+    "teams": [
+      "Ghana",
+      "Sierra Leone"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-25",
+    "winner": "Sierra Leone",
+    "result": "13 runs",
+    "competition": "Nigeria Quadrangular T20 Series"
+  },
+  {
+    "match_id": "1554590",
+    "teams": [
+      "Nigeria A",
+      "Nigeria"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-25",
+    "winner": null,
+    "result": "Nigeria won by 2 wickets (with 5 balls remaining)",
+    "competition": "Nigeria Quadrangular T20 Series"
+  },
+  {
+    "match_id": "1555259",
+    "teams": [
+      "Chile (W)",
+      "CRC-W"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-25",
+    "winner": null,
+    "result": "CRC-W won by 8 wickets (with 36 balls remaining)",
+    "competition": "South American Women's Championships"
+  },
+  {
+    "match_id": "1555260",
+    "teams": [
+      "Brazil A W",
+      "CRC-W"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-25",
+    "winner": null,
+    "result": "Brazil A W won by 62 runs",
+    "competition": "South American Women's Championships"
+  },
+  {
+    "match_id": "1551835",
+    "teams": [
+      "Northern Cpe",
+      "Border"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-26",
+    "winner": null,
+    "result": "Match abandoned without a ball bowled",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1552770",
+    "teams": [
+      "Nepal",
+      "Japan"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-26",
+    "winner": null,
+    "result": "No result",
+    "competition": "Asian Games Men's Cricket Competition"
+  },
+  {
+    "match_id": "1552771",
+    "teams": [
+      "Malaysia",
+      "Oman"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-26",
+    "winner": null,
+    "result": "Match abandoned without a ball bowled",
+    "competition": "Asian Games Men's Cricket Competition"
+  },
+  {
+    "match_id": "1552800",
+    "teams": [
+      "Bahamas",
+      "Bermuda"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-26",
+    "winner": "Bermuda",
+    "result": "8 wickets",
+    "competition": "North America Cup"
+  },
+  {
+    "match_id": "1554591",
+    "teams": [
+      "Sierra Leone",
+      "Nigeria A"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-26",
+    "winner": null,
+    "result": "Nigeria A won by 9 wickets (with 78 balls remaining)",
+    "competition": "Nigeria Quadrangular T20 Series"
+  },
+  {
+    "match_id": "1554592",
+    "teams": [
+      "Nigeria",
+      "Ghana"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-26",
+    "winner": "Nigeria",
+    "result": "91 runs",
+    "competition": "Nigeria Quadrangular T20 Series"
+  },
+  {
+    "match_id": "1496590",
+    "teams": [
+      "England",
+      "Sri Lanka"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-27",
+    "winner": "England",
+    "result": "223 runs",
+    "competition": "Sri Lanka tour of England"
+  },
+  {
+    "match_id": "1525656",
+    "teams": [
+      "South Africa",
+      "Australia"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-27",
+    "winner": "South Africa",
+    "result": "32 runs",
+    "competition": "Australia tour of South Africa"
+  },
+  {
+    "match_id": "1529227",
+    "teams": [
+      "India",
+      "West Indies"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-27",
+    "winner": "India",
+    "result": "8 wickets",
+    "competition": "West Indies tour of India"
+  },
+  {
+    "match_id": "1535684",
+    "teams": [
+      "AUS Under-19",
+      "IND Under-19"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-27",
+    "winner": null,
+    "result": "IND Under-19 won by an innings and 48 runs",
+    "competition": "Australia Under-19s tour of India"
+  },
+  {
+    "match_id": "1551836",
+    "teams": [
+      "Dolphins",
+      "Lions"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-27",
+    "winner": "Lions",
+    "result": "8 runs",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1551837",
+    "teams": [
+      "W Province",
+      "Knights"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-27",
+    "winner": "W Province",
+    "result": "5 wickets",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1551838",
+    "teams": [
+      "Mpumalanga",
+      "Titans"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-27",
+    "winner": "Titans",
+    "result": "9 wickets",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1552801",
+    "teams": [
+      "Cayman",
+      "Bermuda"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-27",
+    "winner": "Bermuda",
+    "result": "42 runs",
+    "competition": "North America Cup"
+  },
+  {
+    "match_id": "1554593",
+    "teams": [
+      "Ghana",
+      "Nigeria A"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-27",
+    "winner": null,
+    "result": "Nigeria A won by 7 wickets (with 54 balls remaining) (DLS method)",
+    "competition": "Nigeria Quadrangular T20 Series"
+  },
+  {
+    "match_id": "1554594",
+    "teams": [
+      "Nigeria",
+      "Sierra Leone"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-27",
+    "winner": "Nigeria",
+    "result": "71 runs",
+    "competition": "Nigeria Quadrangular T20 Series"
+  },
+  {
+    "match_id": "1554976",
+    "teams": [
+      "WI Women",
+      "ZIM Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-27",
+    "winner": null,
+    "result": "ZIM Women won by 4 wickets (with 55 balls remaining)",
+    "competition": "West Indies Women tour of Zimbabwe"
+  },
+  {
+    "match_id": "1555261",
+    "teams": [
+      "Brazil A W",
+      "CRC-W"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-27",
+    "winner": null,
+    "result": "Brazil A W won by 74 runs",
+    "competition": "South American Women's Championships"
+  },
+  {
+    "match_id": "1555408",
+    "teams": [
+      "Utd Service",
+      "Kowloon CC"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-27",
+    "winner": null,
+    "result": "Kowloon CC won by 6 wickets (with 125 balls remaining)",
+    "competition": "Hong Kong Premier League One-Day Tournament"
+  },
+  {
+    "match_id": "1551342",
+    "teams": [
+      "Pamir",
+      "Maiwand"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-28",
+    "winner": null,
+    "result": "Pamir won by 294 runs",
+    "competition": "Ahmad Shah Abdali 4-day Tournament"
+  },
+  {
+    "match_id": "1551343",
+    "teams": [
+      "Hindukush",
+      "Mah-e-Par"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-28",
+    "winner": null,
+    "result": "Mah-e-Par won by an innings and 23 runs",
+    "competition": "Ahmad Shah Abdali 4-day Tournament"
+  },
+  {
+    "match_id": "1551839",
+    "teams": [
+      "Border",
+      "North West"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-28",
+    "winner": "Border",
+    "result": "13 runs",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1552772",
+    "teams": [
+      "Hong Kong",
+      "Pakistan"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-28",
+    "winner": null,
+    "result": "Match abandoned without a ball bowled",
+    "competition": "Asian Games Men's Cricket Competition"
+  },
+  {
+    "match_id": "1535673",
+    "teams": [
+      "Australia A",
+      "India A"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": null,
+    "result": "Match drawn",
+    "competition": "Australia A tour of India"
+  },
+  {
+    "match_id": "1545774",
+    "teams": [
+      "SAust Women",
+      "VIC Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": null,
+    "result": "VIC Women won by 2 wickets (with 3 balls remaining)",
+    "competition": "Women's National Cricket League"
+  },
+  {
+    "match_id": "1545775",
+    "teams": [
+      "Qld Women",
+      "NSW Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": null,
+    "result": "NSW Women won by 6 wickets (with 150 balls remaining)",
+    "competition": "Women's National Cricket League"
+  },
+  {
+    "match_id": "1545776",
+    "teams": [
+      "Tas Women",
+      "WA Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": null,
+    "result": "WA Women won by 4 wickets (with 88 balls remaining)",
+    "competition": "Women's National Cricket League"
+  },
+  {
+    "match_id": "1551840",
+    "teams": [
+      "Boland",
+      "Knights"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": "Boland",
+    "result": "5 wickets",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1551841",
+    "teams": [
+      "Warriors",
+      "Limpopo"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": "Warriors",
+    "result": "35 runs",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1551842",
+    "teams": [
+      "SA Emerging",
+      "KZN-Inland"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": null,
+    "result": "Match abandoned without a ball bowled",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1552027",
+    "teams": [
+      "IND-A Women",
+      "AUS-A Women"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": null,
+    "result": "IND-A Women won by 281 runs",
+    "competition": "Australia A Women tour of India"
+  },
+  {
+    "match_id": "1552774",
+    "teams": [
+      "Nepal",
+      "Sri Lanka"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": null,
+    "result": "Match abandoned without a ball bowled",
+    "competition": "Asian Games Men's Cricket Competition"
+  },
+  {
+    "match_id": "1552775",
+    "teams": [
+      "Bangladesh",
+      "Malaysia"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": null,
+    "result": "Match abandoned without a ball bowled",
+    "competition": "Asian Games Men's Cricket Competition"
+  },
+  {
+    "match_id": "1556685",
+    "teams": [
+      "Warriors",
+      "BBZ"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": null,
+    "result": "BBZ won by 3 wickets (with 6 balls remaining)",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556686",
+    "teams": [
+      "Sixers",
+      "Tigers"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": null,
+    "result": "Sixers won by 16 runs",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556687",
+    "teams": [
+      "Anchors",
+      "Masters"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": null,
+    "result": "Masters won by 5 wickets (with 3 balls remaining)",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556876",
+    "teams": [
+      "Sixers Women",
+      "Warriors"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-29",
+    "winner": null,
+    "result": "Warriors won by 7 wickets (with 6 balls remaining)",
+    "competition": "Canada Super60 Women"
+  },
+  {
+    "match_id": "1525657",
+    "teams": [
+      "South Africa",
+      "Australia"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-30",
+    "winner": "Australia",
+    "result": "45 runs",
+    "competition": "Australia tour of South Africa"
+  },
+  {
+    "match_id": "1529228",
+    "teams": [
+      "India",
+      "West Indies"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-09-30",
+    "winner": "India",
+    "result": "8 wickets",
+    "competition": "West Indies tour of India"
+  },
+  {
+    "match_id": "1551843",
+    "teams": [
+      "Dolphins",
+      "Northern Cpe"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-30",
+    "winner": "Dolphins",
+    "result": "104 runs",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1551844",
+    "teams": [
+      "Easterns",
+      "Mpumalanga"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-09-30",
+    "winner": null,
+    "result": "No result (abandoned with a toss)",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1553789",
+    "teams": [
+      "Markhor IT",
+      "Ghani"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-30",
+    "winner": null,
+    "result": "Ghani won by an innings and 140 runs",
+    "competition": "President's Trophy Grade-I"
+  },
+  {
+    "match_id": "1553790",
+    "teams": [
+      "Kingsmen",
+      "Khan RL"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-30",
+    "winner": null,
+    "result": "Match drawn",
+    "competition": "President's Trophy Grade-I"
+  },
+  {
+    "match_id": "1553791",
+    "teams": [
+      "Sui Northern",
+      "Pakistan TV"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-30",
+    "winner": null,
+    "result": "Match drawn",
+    "competition": "President's Trophy Grade-I"
+  },
+  {
+    "match_id": "1553792",
+    "teams": [
+      "Oil & Gas",
+      "State B of P"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-09-30",
+    "winner": null,
+    "result": "State B of P won by 4 wickets",
+    "competition": "President's Trophy Grade-I"
+  },
+  {
+    "match_id": "1554977",
+    "teams": [
+      "WI Women",
+      "ZIM Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-30",
+    "winner": null,
+    "result": "WI Women won by 91 runs",
+    "competition": "West Indies Women tour of Zimbabwe"
+  },
+  {
+    "match_id": "1556688",
+    "teams": [
+      "Sixers",
+      "BBZ"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-30",
+    "winner": null,
+    "result": "BBZ won by 4 wickets (with 1 ball remaining)",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556689",
+    "teams": [
+      "Tigers",
+      "Anchors"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-30",
+    "winner": null,
+    "result": "Anchors won by 7 wickets (with 2 balls remaining)",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556690",
+    "teams": [
+      "Warriors",
+      "Masters"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-30",
+    "winner": null,
+    "result": "Masters won by 9 wickets (with 34 balls remaining)",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556877",
+    "teams": [
+      "Sixers Women",
+      "Anchors"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-09-30",
+    "winner": null,
+    "result": "Sixers Women won by 21 runs",
+    "competition": "Canada Super60 Women"
+  },
+  {
+    "match_id": "1545777",
+    "teams": [
+      "VIC Women",
+      "SAust Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-01",
+    "winner": null,
+    "result": "Match abandoned without a ball bowled",
+    "competition": "Women's National Cricket League"
+  },
+  {
+    "match_id": "1545778",
+    "teams": [
+      "Qld Women",
+      "NSW Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-01",
+    "winner": null,
+    "result": "Qld Women won by 111 runs",
+    "competition": "Women's National Cricket League"
+  },
+  {
+    "match_id": "1545779",
+    "teams": [
+      "Tas Women",
+      "WA Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-01",
+    "winner": null,
+    "result": "Tas Women won by 26 runs",
+    "competition": "Women's National Cricket League"
+  },
+  {
+    "match_id": "1546442",
+    "teams": [
+      "Rest of Ind",
+      "J & K"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-10-01",
+    "winner": null,
+    "result": "Rest of Ind won by 167 runs",
+    "competition": "Irani Cup"
+  },
+  {
+    "match_id": "1551845",
+    "teams": [
+      "S West D",
+      "Border"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-01",
+    "winner": "S West D",
+    "result": "39 runs",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1552776",
+    "teams": [
+      "Bangladesh",
+      "Pakistan"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-01",
+    "winner": "Pakistan",
+    "result": "6 wickets",
+    "competition": "Asian Games Men's Cricket Competition"
+  },
+  {
+    "match_id": "1552777",
+    "teams": [
+      "India",
+      "Sri Lanka"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-01",
+    "winner": "India",
+    "result": "124 runs",
+    "competition": "Asian Games Men's Cricket Competition"
+  },
+  {
+    "match_id": "1556691",
+    "teams": [
+      "BBZ",
+      "Anchors"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-01",
+    "winner": null,
+    "result": "Anchors won by 6 wickets (with 8 balls remaining)",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556692",
+    "teams": [
+      "Warriors",
+      "Sixers"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-01",
+    "winner": null,
+    "result": "Sixers won by 5 wickets (with 3 balls remaining)",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556693",
+    "teams": [
+      "Masters",
+      "Tigers"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-01",
+    "winner": null,
+    "result": "Masters won by 2 runs",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556878",
+    "teams": [
+      "Anchors",
+      "Warriors"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-01",
+    "winner": null,
+    "result": "Warriors won by 8 wickets (with 14 balls remaining)",
+    "competition": "Canada Super60 Women"
+  },
+  {
+    "match_id": "1551846",
+    "teams": [
+      "Knights",
+      "Titans"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-02",
+    "winner": "Titans",
+    "result": "124 runs",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1551847",
+    "teams": [
+      "Mpumalanga",
+      "KZN-Inland"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-02",
+    "winner": "Mpumalanga",
+    "result": "17 runs",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1551848",
+    "teams": [
+      "Lions",
+      "North West"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-02",
+    "winner": "North West",
+    "result": "6 wickets",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1554707",
+    "teams": [
+      "BAN-WMN U19",
+      "PAK-WMN U19"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-02",
+    "winner": null,
+    "result": "BAN-WMN U19 won by 30 runs",
+    "competition": "Pakistan Women's Under-19s T20 Tri-Series"
+  },
+  {
+    "match_id": "1556694",
+    "teams": [
+      "Sixers",
+      "Anchors"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-02",
+    "winner": null,
+    "result": "Anchors won by 7 wickets (with 2 balls remaining)",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556695",
+    "teams": [
+      "Warriors",
+      "Tigers"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-02",
+    "winner": null,
+    "result": "Warriors won by 13 runs",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556696",
+    "teams": [
+      "Masters",
+      "BBZ"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-02",
+    "winner": null,
+    "result": "Masters won by 33 runs",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556879",
+    "teams": [
+      "Anchors",
+      "Sixers Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-02",
+    "winner": null,
+    "result": "Sixers Women won by 9 wickets (with 16 balls remaining)",
+    "competition": "Canada Super60 Women"
+  },
+  {
+    "match_id": "1525658",
+    "teams": [
+      "CSA Inv XI",
+      "Australia"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "Match drawn",
+    "competition": "Australia tour of South Africa"
+  },
+  {
+    "match_id": "1529229",
+    "teams": [
+      "India",
+      "West Indies"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": "West Indies",
+    "result": "5 wickets",
+    "competition": "West Indies tour of India"
+  },
+  {
+    "match_id": "1552778",
+    "teams": [
+      "Bangladesh",
+      "Sri Lanka"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": "Sri Lanka",
+    "result": "63 runs",
+    "competition": "Asian Games Men's Cricket Competition"
+  },
+  {
+    "match_id": "1552779",
+    "teams": [
+      "India",
+      "Pakistan"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": "India",
+    "result": "19 runs",
+    "competition": "Asian Games Men's Cricket Competition"
+  },
+  {
+    "match_id": "1554089",
+    "teams": [
+      "WPR Women",
+      "Swd D Wmn"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "WPR Women won by 65 runs",
+    "competition": "CSA Women Pro50 Series"
+  },
+  {
+    "match_id": "1554090",
+    "teams": [
+      "EPR Women",
+      "LIONS WMN"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "Match abandoned without a ball bowled",
+    "competition": "CSA Women Pro50 Series"
+  },
+  {
+    "match_id": "1554091",
+    "teams": [
+      "Titans WMN",
+      "Dolphins WMN"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "Titans WMN won by 86 runs",
+    "competition": "CSA Women Pro50 Series"
+  },
+  {
+    "match_id": "1554409",
+    "teams": [
+      "Namibia",
+      "U.A.E."
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "No result",
+    "competition": "ICC Men's Cricket World Cup League 2"
+  },
+  {
+    "match_id": "1554708",
+    "teams": [
+      "SL-WMN U19",
+      "PAK-WMN U19"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "PAK-WMN U19 won by 5 wickets (with 6 balls remaining)",
+    "competition": "Pakistan Women's Under-19s T20 Tri-Series"
+  },
+  {
+    "match_id": "1554978",
+    "teams": [
+      "ZIM Women",
+      "WI Women"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "WI Women won by 8 wickets (with 43 balls remaining)",
+    "competition": "West Indies Women tour of Zimbabwe"
+  },
+  {
+    "match_id": "1555135",
+    "teams": [
+      "South Korea",
+      "Indonesia"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": "South Korea",
+    "result": "7 wickets",
+    "competition": "Indonesia tour of South Korea"
+  },
+  {
+    "match_id": "1555665",
+    "teams": [
+      "Mymensingh",
+      "Sylhet DIV"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "Match drawn",
+    "competition": "National Cricket League"
+  },
+  {
+    "match_id": "1555666",
+    "teams": [
+      "Rangpur DIV",
+      "Dhaka DIV"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "Match drawn",
+    "competition": "National Cricket League"
+  },
+  {
+    "match_id": "1555667",
+    "teams": [
+      "Khulna DIV",
+      "Barishal DIV"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "Khulna DIV won by an innings and 135 runs",
+    "competition": "National Cricket League"
+  },
+  {
+    "match_id": "1555668",
+    "teams": [
+      "Rajshahi DIV",
+      "Chattogram"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "Match drawn",
+    "competition": "National Cricket League"
+  },
+  {
+    "match_id": "1556697",
+    "teams": [
+      "Anchors",
+      "Warriors"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "Anchors won by 35 runs",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556698",
+    "teams": [
+      "Masters",
+      "Sixers"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "Masters won by 92 runs",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556699",
+    "teams": [
+      "BBZ",
+      "Tigers"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "BBZ won by 7 runs",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556880",
+    "teams": [
+      "Warriors",
+      "Sixers Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-03",
+    "winner": null,
+    "result": "Sixers Women won by 6 wickets (with 3 balls remaining)",
+    "competition": "Canada Super60 Women"
+  },
+  {
+    "match_id": "1551344",
+    "teams": [
+      "Mah-e-Par",
+      "Hindukush"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-10-04",
+    "winner": null,
+    "result": "Mah-e-Par won by 203 runs",
+    "competition": "Ahmad Shah Abdali 4-day Tournament"
+  },
+  {
+    "match_id": "1551849",
+    "teams": [
+      "Limpopo",
+      "Dolphins"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-04",
+    "winner": "Dolphins",
+    "result": "7 wickets",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1551850",
+    "teams": [
+      "W Province",
+      "SA Emerging"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-04",
+    "winner": "W Province",
+    "result": "6 wickets",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1551851",
+    "teams": [
+      "Warriors",
+      "LIONS"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-04",
+    "winner": null,
+    "result": "Match abandoned without a ball bowled",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1551852",
+    "teams": [
+      "KZN-Inland",
+      "Boland"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-04",
+    "winner": "Boland",
+    "result": "63 runs",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1554060",
+    "teams": [
+      "Swd D Wmn",
+      "WPR Women"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-04",
+    "winner": null,
+    "result": "Swd D Wmn won by 12 runs",
+    "competition": "CSA Women Pro20 Series"
+  },
+  {
+    "match_id": "1554061",
+    "teams": [
+      "EPR Women",
+      "LIONS WMN"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-04",
+    "winner": null,
+    "result": "Match abandoned without a ball bowled",
+    "competition": "CSA Women Pro20 Series"
+  },
+  {
+    "match_id": "1554062",
+    "teams": [
+      "Dolphins WMN",
+      "Titans WMN"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-04",
+    "winner": null,
+    "result": "Titans WMN won by 8 wickets (with 13 balls remaining)",
+    "competition": "CSA Women Pro20 Series"
+  },
+  {
+    "match_id": "1555136",
+    "teams": [
+      "South Korea",
+      "Indonesia"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-04",
+    "winner": "South Korea",
+    "result": "9 wickets",
+    "competition": "Indonesia tour of South Korea"
+  },
+  {
+    "match_id": "1556700",
+    "teams": [
+      "Sixers",
+      "Masters"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-04",
+    "winner": null,
+    "result": "Sixers won by 9 runs",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556701",
+    "teams": [
+      "BBZ",
+      "Anchors"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-04",
+    "winner": null,
+    "result": "Anchors won by 6 wickets (with 19 balls remaining)",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1556702",
+    "teams": [
+      "Anchors",
+      "Sixers"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-04",
+    "winner": null,
+    "result": "Sixers won by 5 wickets (with 0 balls remaining)",
+    "competition": "Canada Super60"
+  },
+  {
+    "match_id": "1535685",
+    "teams": [
+      "AUS Under-19",
+      "IND Under-19"
+    ],
+    "format": "TEST",
+    "season": "2026",
+    "date": "2026-10-05",
+    "winner": null,
+    "result": "IND Under-19 won by 10 wickets",
+    "competition": "Australia Under-19s tour of India"
+  },
+  {
+    "match_id": "1551853",
+    "teams": [
+      "Limpopo",
+      "S West D"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-05",
+    "winner": "S West D",
+    "result": "5 wickets",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1554410",
+    "teams": [
+      "U.S.A.",
+      "U.A.E."
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-10-05",
+    "winner": "U.S.A.",
+    "result": "6 wickets",
+    "competition": "ICC Men's Cricket World Cup League 2"
+  },
+  {
+    "match_id": "1554533",
+    "teams": [
+      "Bhutan",
+      "Myanmar"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-05",
+    "winner": "Bhutan",
+    "result": "27 runs",
+    "competition": "ICC Men's T20 World Cup Sub Regional Asia Qualifier A"
+  },
+  {
+    "match_id": "1554534",
+    "teams": [
+      "Bahrain",
+      "Thailand"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-05",
+    "winner": "Bahrain",
+    "result": "7 runs",
+    "competition": "ICC Men's T20 World Cup Sub Regional Asia Qualifier A"
+  },
+  {
+    "match_id": "1554535",
+    "teams": [
+      "Kuwait",
+      "Qatar"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-05",
+    "winner": "Kuwait",
+    "result": "58 runs",
+    "competition": "ICC Men's T20 World Cup Sub Regional Asia Qualifier A"
+  },
+  {
+    "match_id": "1554709",
+    "teams": [
+      "BAN-WMN U19",
+      "SL-WMN U19"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-05",
+    "winner": null,
+    "result": "SL-WMN U19 won by 4 wickets (with 0 balls remaining)",
+    "competition": "Pakistan Women's Under-19s T20 Tri-Series"
+  },
+  {
+    "match_id": "1554979",
+    "teams": [
+      "ZIM Women",
+      "WI Women"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-05",
+    "winner": null,
+    "result": "WI Women won by 8 wickets (with 65 balls remaining)",
+    "competition": "West Indies Women tour of Zimbabwe"
+  },
+  {
+    "match_id": "1555137",
+    "teams": [
+      "South Korea",
+      "Indonesia"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-05",
+    "winner": "South Korea",
+    "result": "8 wickets",
+    "competition": "Indonesia tour of South Korea"
+  },
+  {
+    "match_id": "1555138",
+    "teams": [
+      "South Korea",
+      "Indonesia"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-05",
+    "winner": "South Korea",
+    "result": "42 runs",
+    "competition": "Indonesia tour of South Korea"
+  },
+  {
+    "match_id": "1529230",
+    "teams": [
+      "India",
+      "West Indies"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-06",
+    "winner": "India",
+    "result": "8 wickets",
+    "competition": "West Indies tour of India"
+  },
+  {
+    "match_id": "1535674",
+    "teams": [
+      "India A",
+      "Australia A"
+    ],
+    "format": "List A",
+    "season": "2026",
+    "date": "2026-10-06",
+    "winner": "Australia A",
+    "result": "125 runs",
+    "competition": "Australia A tour of India"
+  },
+  {
+    "match_id": "1551854",
+    "teams": [
+      "W Province",
+      "Easterns"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-06",
+    "winner": "W Province",
+    "result": "9 wickets",
+    "competition": "CSA Pro20 Cup"
+  },
+  {
+    "match_id": "1554536",
+    "teams": [
+      "Qatar",
+      "Thailand"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-06",
+    "winner": "Qatar",
+    "result": "7 wickets",
+    "competition": "ICC Men's T20 World Cup Sub Regional Asia Qualifier A"
+  },
+  {
+    "match_id": "1554537",
+    "teams": [
+      "Bahrain",
+      "Bhutan"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-06",
+    "winner": "Bahrain",
+    "result": "66 runs",
+    "competition": "ICC Men's T20 World Cup Sub Regional Asia Qualifier A"
+  },
+  {
+    "match_id": "1554538",
+    "teams": [
+      "Kuwait",
+      "Mongolia"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-06",
+    "winner": "Kuwait",
+    "result": "10 wickets",
+    "competition": "ICC Men's T20 World Cup Sub Regional Asia Qualifier A"
+  },
+  {
+    "match_id": "1554710",
+    "teams": [
+      "BAN-WMN U19",
+      "PAK-WMN U19"
+    ],
+    "format": "T20",
+    "season": "2026",
+    "date": "2026-10-06",
+    "winner": null,
+    "result": "BAN-WMN U19 won by 13 runs",
+    "competition": "Pakistan Women's Under-19s T20 Tri-Series"
+  },
+  {
+    "match_id": "1557256",
+    "teams": [
+      "Qld Women",
+      "BAN Women"
+    ],
+    "format": "ODI",
+    "season": "2026",
+    "date": "2026-10-06",
+    "winner": null,
+    "result": "Qld Women won by 72 runs (DLS method)",
+    "competition": "Bangladesh Women tour of Australia"
+  }
+]
