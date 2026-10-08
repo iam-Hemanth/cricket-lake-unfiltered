@@ -1,0 +1,1018 @@
+{
+  "match_id": "1152847",
+  "groups": [
+    {
+      "type": "PLAYING",
+      "team": {
+        "id": 1,
+        "name": "England"
+      },
+      "players": [
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 59611,
+            "objectId": 398778,
+            "name": "RJ Burns",
+            "longName": "Rory Burns"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 52290,
+            "objectId": 298438,
+            "name": "JJ Roy",
+            "longName": "Jason Roy"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "C",
+          "player": {
+            "id": 52656,
+            "objectId": 303669,
+            "name": "JE Root",
+            "longName": "Joe Root"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 46925,
+            "objectId": 12454,
+            "name": "JL Denly",
+            "longName": "Joe Denly"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 53271,
+            "objectId": 308967,
+            "name": "JC Buttler",
+            "longName": "Jos Buttler"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 53320,
+            "objectId": 311158,
+            "name": "BA Stokes",
+            "longName": "Ben Stokes"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "WK",
+          "player": {
+            "id": 52161,
+            "objectId": 297433,
+            "name": "JM Bairstow",
+            "longName": "Jonny Bairstow"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 49496,
+            "objectId": 247235,
+            "name": "CR Woakes",
+            "longName": "Chris Woakes"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 72379,
+            "objectId": 669855,
+            "name": "JC Archer",
+            "longName": "Jofra Archer"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 48440,
+            "objectId": 10617,
+            "name": "SCJ Broad",
+            "longName": "Stuart Broad"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 62431,
+            "objectId": 455524,
+            "name": "MJ Leach",
+            "longName": "Jack Leach"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        }
+      ],
+      "bestBatsmen": [
+        {
+          "player": {
+            "id": 52656,
+            "objectId": 303669,
+            "name": "JE Root",
+            "longName": "Joe Root",
+            "mobileName": "Root",
+            "indexName": "Root, JE",
+            "battingName": "JE Root",
+            "fieldingName": "Root",
+            "slug": "joe-root",
+            "imageUrl": "/lsci/db/PICTURES/CMS/397100/397148.5.png",
+            "headshotImageUrl": "/lsci/db/PICTURES/CMS/316600/316639.png",
+            "dateOfBirth": {
+              "year": 1990,
+              "month": 12,
+              "date": 30
+            },
+            "dateOfDeath": null,
+            "gender": "M",
+            "battingStyles": [
+              "rhb"
+            ],
+            "bowlingStyles": [
+              "ob"
+            ],
+            "longBattingStyles": [
+              "right-hand bat"
+            ],
+            "longBowlingStyles": [
+              "right-arm offbreak"
+            ],
+            "image": {
+              "id": 397148,
+              "objectId": 1474587,
+              "slug": "joe-root-player-portrait",
+              "url": "/lsci/db/PICTURES/CMS/397100/397148.5.png",
+              "width": 160,
+              "height": 136,
+              "caption": "Joe Root, player portrait",
+              "longCaption": "Joe Root, player portrait",
+              "credit": "ICC/Getty Images",
+              "photographer": "Matthew Lewis",
+              "peerUrls": null
+            },
+            "countryTeamId": 1,
+            "playerRoleTypeIds": [
+              2
+            ],
+            "playingRoles": [
+              "top-order batter"
+            ],
+            "headshotImage": {
+              "id": 316639,
+              "objectId": 1251272,
+              "slug": "je-root-headshot",
+              "url": "/lsci/db/PICTURES/CMS/316600/316639.png",
+              "width": 600,
+              "height": 436,
+              "caption": "JE Root headshot",
+              "longCaption": "JE Root headshot",
+              "credit": null,
+              "photographer": null,
+              "peerUrls": {
+                "FILM": null,
+                "WIDE": null,
+                "SQUARE": null
+              }
+            }
+          },
+          "team": {
+            "id": 1,
+            "objectId": 1,
+            "slug": "england",
+            "name": "England",
+            "longName": "England",
+            "abbreviation": "ENG",
+            "imageUrl": "/lsci/db/PICTURES/CMS/419200/419236.png",
+            "unofficialName": ""
+          },
+          "matches": 10,
+          "runs": 727,
+          "innings": 19,
+          "average": 42.7647,
+          "notouts": 2,
+          "strikerate": 60.13
+        },
+        {
+          "player": {
+            "id": 53320,
+            "objectId": 311158,
+            "name": "BA Stokes",
+            "longName": "Ben Stokes",
+            "mobileName": "Stokes",
+            "indexName": "Stokes, BA",
+            "battingName": "BA Stokes",
+            "fieldingName": "Stokes",
+            "slug": "ben-stokes",
+            "imageUrl": "/lsci/db/PICTURES/CMS/319700/319748.1.png",
+            "headshotImageUrl": "/lsci/db/PICTURES/CMS/319700/319748.png",
+            "dateOfBirth": {
+              "year": 1991,
+              "month": 6,
+              "date": 4
+            },
+            "dateOfDeath": null,
+            "gender": "M",
+            "battingStyles": [
+              "lhb"
+            ],
+            "bowlingStyles": [
+              "rfm"
+            ],
+            "longBattingStyles": [
+              "left-hand bat"
+            ],
+            "longBowlingStyles": [
+              "right-arm fast-medium"
+            ],
+            "image": {
+              "id": 319748,
+              "objectId": 1259754,
+              "slug": "ben-stokes-player-page-headshot-cutout-2021",
+              "url": "/lsci/db/PICTURES/CMS/319700/319748.1.png",
+              "width": 160,
+              "height": 136,
+              "caption": "Ben Stokes player page headshot cutout, 2021",
+              "longCaption": "Ben Stokes player page headshot cutout, 2021",
+              "credit": null,
+              "photographer": null,
+              "peerUrls": null
+            },
+            "countryTeamId": 1,
+            "playerRoleTypeIds": [
+              5
+            ],
+            "playingRoles": [
+              "allrounder"
+            ],
+            "headshotImage": {
+              "id": 319748,
+              "objectId": 1259754,
+              "slug": "ben-stokes-player-page-headshot-cutout-2021",
+              "url": "/lsci/db/PICTURES/CMS/319700/319748.png",
+              "width": 600,
+              "height": 436,
+              "caption": "Ben Stokes player page headshot cutout, 2021",
+              "longCaption": "Ben Stokes player page headshot cutout, 2021",
+              "credit": null,
+              "photographer": null,
+              "peerUrls": {
+                "FILM": null,
+                "WIDE": null,
+                "SQUARE": "/lsci/db/PICTURES/CMS/319700/319748.square.png"
+              }
+            }
+          },
+          "team": {
+            "id": 1,
+            "objectId": 1,
+            "slug": "england",
+            "name": "England",
+            "longName": "England",
+            "abbreviation": "ENG",
+            "imageUrl": "/lsci/db/PICTURES/CMS/419200/419236.png",
+            "unofficialName": ""
+          },
+          "matches": 6,
+          "runs": 233,
+          "innings": 12,
+          "average": 19.4167,
+          "notouts": 0,
+          "strikerate": 41.68
+        }
+      ],
+      "bestBowlers": [
+        {
+          "player": {
+            "id": 72379,
+            "objectId": 669855,
+            "name": "JC Archer",
+            "longName": "Jofra Archer",
+            "mobileName": "Archer",
+            "indexName": "Archer, JC",
+            "battingName": "JC Archer",
+            "fieldingName": "Archer",
+            "slug": "jofra-archer",
+            "imageUrl": "/lsci/db/PICTURES/CMS/383100/383146.1.png",
+            "headshotImageUrl": "/lsci/db/PICTURES/CMS/383100/383146.png",
+            "dateOfBirth": {
+              "year": 1995,
+              "month": 4,
+              "date": 1
+            },
+            "dateOfDeath": null,
+            "gender": "M",
+            "battingStyles": [
+              "rhb"
+            ],
+            "bowlingStyles": [
+              "rf"
+            ],
+            "longBattingStyles": [
+              "right-hand bat"
+            ],
+            "longBowlingStyles": [
+              "right-arm fast"
+            ],
+            "image": {
+              "id": 383146,
+              "objectId": 1439387,
+              "slug": "jofra-archer-cutout",
+              "url": "/lsci/db/PICTURES/CMS/383100/383146.1.png",
+              "width": 160,
+              "height": 136,
+              "caption": "Jofra Archer cutout",
+              "longCaption": "Jofra Archer cutout",
+              "credit": null,
+              "photographer": null,
+              "peerUrls": null
+            },
+            "countryTeamId": 1,
+            "playerRoleTypeIds": [
+              4
+            ],
+            "playingRoles": [
+              "bowler"
+            ],
+            "headshotImage": {
+              "id": 383146,
+              "objectId": 1439387,
+              "slug": "jofra-archer-cutout",
+              "url": "/lsci/db/PICTURES/CMS/383100/383146.png",
+              "width": 600,
+              "height": 436,
+              "caption": "Jofra Archer cutout",
+              "longCaption": "Jofra Archer cutout",
+              "credit": null,
+              "photographer": null,
+              "peerUrls": {
+                "FILM": null,
+                "WIDE": null,
+                "SQUARE": "/lsci/db/PICTURES/CMS/383100/383146.square.png"
+              }
+            }
+          },
+          "team": {
+            "id": 1,
+            "objectId": 1,
+            "slug": "england",
+            "name": "England",
+            "longName": "England",
+            "abbreviation": "ENG",
+            "imageUrl": "/lsci/db/PICTURES/CMS/419200/419236.png",
+            "unofficialName": ""
+          },
+          "matches": 7,
+          "wickets": 30,
+          "innings": 14,
+          "average": 25.3,
+          "economy": 3.5385,
+          "conceded": 759,
+          "balls": 1287,
+          "strikerate": 42.9
+        },
+        {
+          "player": {
+            "id": 53320,
+            "objectId": 311158,
+            "name": "BA Stokes",
+            "longName": "Ben Stokes",
+            "mobileName": "Stokes",
+            "indexName": "Stokes, BA",
+            "battingName": "BA Stokes",
+            "fieldingName": "Stokes",
+            "slug": "ben-stokes",
+            "imageUrl": "/lsci/db/PICTURES/CMS/319700/319748.1.png",
+            "headshotImageUrl": "/lsci/db/PICTURES/CMS/319700/319748.png",
+            "dateOfBirth": {
+              "year": 1991,
+              "month": 6,
+              "date": 4
+            },
+            "dateOfDeath": null,
+            "gender": "M",
+            "battingStyles": [
+              "lhb"
+            ],
+            "bowlingStyles": [
+              "rfm"
+            ],
+            "longBattingStyles": [
+              "left-hand bat"
+            ],
+            "longBowlingStyles": [
+              "right-arm fast-medium"
+            ],
+            "image": {
+              "id": 319748,
+              "objectId": 1259754,
+              "slug": "ben-stokes-player-page-headshot-cutout-2021",
+              "url": "/lsci/db/PICTURES/CMS/319700/319748.1.png",
+              "width": 160,
+              "height": 136,
+              "caption": "Ben Stokes player page headshot cutout, 2021",
+              "longCaption": "Ben Stokes player page headshot cutout, 2021",
+              "credit": null,
+              "photographer": null,
+              "peerUrls": null
+            },
+            "countryTeamId": 1,
+            "playerRoleTypeIds": [
+              5
+            ],
+            "playingRoles": [
+              "allrounder"
+            ],
+            "headshotImage": {
+              "id": 319748,
+              "objectId": 1259754,
+              "slug": "ben-stokes-player-page-headshot-cutout-2021",
+              "url": "/lsci/db/PICTURES/CMS/319700/319748.png",
+              "width": 600,
+              "height": 436,
+              "caption": "Ben Stokes player page headshot cutout, 2021",
+              "longCaption": "Ben Stokes player page headshot cutout, 2021",
+              "credit": null,
+              "photographer": null,
+              "peerUrls": {
+                "FILM": null,
+                "WIDE": null,
+                "SQUARE": "/lsci/db/PICTURES/CMS/319700/319748.square.png"
+              }
+            }
+          },
+          "team": {
+            "id": 1,
+            "objectId": 1,
+            "slug": "england",
+            "name": "England",
+            "longName": "England",
+            "abbreviation": "ENG",
+            "imageUrl": "/lsci/db/PICTURES/CMS/419200/419236.png",
+            "unofficialName": ""
+          },
+          "matches": 6,
+          "wickets": 17,
+          "innings": 10,
+          "average": 28.7647,
+          "economy": 3.3455,
+          "conceded": 489,
+          "balls": 877,
+          "strikerate": 51.58
+        }
+      ]
+    },
+    {
+      "type": "PLAYING",
+      "team": {
+        "id": 2,
+        "name": "Australia"
+      },
+      "players": [
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 78285,
+            "objectId": 787987,
+            "name": "M Labuschagne",
+            "longName": "Marnus Labuschagne"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 64795,
+            "objectId": 501011,
+            "name": "CT Bancroft",
+            "longName": "Cameron Bancroft"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 48739,
+            "objectId": 219889,
+            "name": "DA Warner",
+            "longName": "David Warner"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 48671,
+            "objectId": 215155,
+            "name": "UT Khawaja",
+            "longName": "Usman Khawaja"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 50281,
+            "objectId": 267192,
+            "name": "SPD Smith",
+            "longName": "Steven Smith"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 66190,
+            "objectId": 530011,
+            "name": "TM Head",
+            "longName": "Travis Head"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 49024,
+            "objectId": 230193,
+            "name": "MS Wade",
+            "longName": "Matthew Wade"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "CWK",
+          "player": {
+            "id": 34747,
+            "objectId": 7252,
+            "name": "TD Paine",
+            "longName": "Tim Paine"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 64244,
+            "objectId": 489889,
+            "name": "PJ Cummins",
+            "longName": "Pat Cummins"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 45980,
+            "objectId": 7898,
+            "name": "PM Siddle",
+            "longName": "Peter Siddle"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 50724,
+            "objectId": 272279,
+            "name": "NM Lyon",
+            "longName": "Nathan Lyon"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        },
+        {
+          "playerRoleType": "P",
+          "player": {
+            "id": 51367,
+            "objectId": 288284,
+            "name": "JR Hazlewood",
+            "longName": "Josh Hazlewood"
+          },
+          "isOverseas": false,
+          "isWithdrawn": false,
+          "note": null
+        }
+      ],
+      "bestBatsmen": [
+        {
+          "player": {
+            "id": 66190,
+            "objectId": 530011,
+            "name": "TM Head",
+            "longName": "Travis Head",
+            "mobileName": "Head",
+            "indexName": "Head, TM",
+            "battingName": "TM Head",
+            "fieldingName": "Head",
+            "slug": "travis-head",
+            "imageUrl": "/lsci/db/PICTURES/CMS/321500/321584.2.png",
+            "headshotImageUrl": "/lsci/db/PICTURES/CMS/321500/321584.png",
+            "dateOfBirth": {
+              "year": 1993,
+              "month": 12,
+              "date": 29
+            },
+            "dateOfDeath": null,
+            "gender": "M",
+            "battingStyles": [
+              "lhb"
+            ],
+            "bowlingStyles": [
+              "ob"
+            ],
+            "longBattingStyles": [
+              "left-hand bat"
+            ],
+            "longBowlingStyles": [
+              "right-arm offbreak"
+            ],
+            "image": {
+              "id": 321584,
+              "objectId": 1263516,
+              "slug": "travis-head-player-page-headshot-cutout-2021",
+              "url": "/lsci/db/PICTURES/CMS/321500/321584.2.png",
+              "width": 160,
+              "height": 136,
+              "caption": "Travis Head player page headshot cutout, 2021",
+              "longCaption": "Travis Head player page headshot cutout, 2021",
+              "credit": null,
+              "photographer": null,
+              "peerUrls": null
+            },
+            "countryTeamId": 2,
+            "playerRoleTypeIds": [
+              3
+            ],
+            "playingRoles": [
+              "middle-order batter"
+            ],
+            "headshotImage": {
+              "id": 321584,
+              "objectId": 1263516,
+              "slug": "travis-head-player-page-headshot-cutout-2021",
+              "url": "/lsci/db/PICTURES/CMS/321500/321584.png",
+              "width": 600,
+              "height": 436,
+              "caption": "Travis Head player page headshot cutout, 2021",
+              "longCaption": "Travis Head player page headshot cutout, 2021",
+              "credit": null,
+              "photographer": null,
+              "peerUrls": {
+                "FILM": null,
+                "WIDE": null,
+                "SQUARE": "/lsci/db/PICTURES/CMS/321500/321584.square.png"
+              }
+            }
+          },
+          "team": {
+            "id": 2,
+            "objectId": 2,
+            "slug": "australia",
+            "name": "Australia",
+            "longName": "Australia",
+            "abbreviation": "AUS",
+            "imageUrl": "/lsci/db/PICTURES/CMS/340400/340493.png",
+            "unofficialName": ""
+          },
+          "matches": 10,
+          "runs": 914,
+          "innings": 19,
+          "average": 48.1053,
+          "notouts": 0,
+          "strikerate": 77.85
+        },
+        {
+          "player": {
+            "id": 50281,
+            "objectId": 267192,
+            "name": "SPD Smith",
+            "longName": "Steven Smith",
+            "mobileName": "Smith",
+            "indexName": "Smith, SPD",
+            "battingName": "SPD Smith",
+            "fieldingName": "Smith",
+            "slug": "steven-smith",
+            "imageUrl": "/lsci/db/PICTURES/CMS/385700/385794.1.png",
+            "headshotImageUrl": "/lsci/db/PICTURES/CMS/385700/385794.png",
+            "dateOfBirth": {
+              "year": 1989,
+              "month": 6,
+              "date": 2
+            },
+            "dateOfDeath": null,
+            "gender": "M",
+            "battingStyles": [
+              "rhb"
+            ],
+            "bowlingStyles": [
+              "lbg"
+            ],
+            "longBattingStyles": [
+              "right-hand bat"
+            ],
+            "longBowlingStyles": [
+              "legbreak googly"
+            ],
+            "image": {
+              "id": 385794,
+              "objectId": 1446448,
+              "slug": "steven-smith-player-page-headshot-cutout-2024",
+              "url": "/lsci/db/PICTURES/CMS/385700/385794.1.png",
+              "width": 160,
+              "height": 136,
+              "caption": "Steven Smith, player page headshot cutout, 2024",
+              "longCaption": "Steven Smith, player page headshot cutout, 2024",
+              "credit": null,
+              "photographer": null,
+              "peerUrls": null
+            },
+            "countryTeamId": 2,
+            "playerRoleTypeIds": [
+              2
+            ],
+            "playingRoles": [
+              "top-order batter"
+            ],
+            "headshotImage": {
+              "id": 385794,
+              "objectId": 1446448,
+              "slug": "steven-smith-player-page-headshot-cutout-2024",
+              "url": "/lsci/db/PICTURES/CMS/385700/385794.png",
+              "width": 600,
+              "height": 436,
+              "caption": "Steven Smith, player page headshot cutout, 2024",
+              "longCaption": "Steven Smith, player page headshot cutout, 2024",
+              "credit": null,
+              "photographer": null,
+              "peerUrls": {
+                "FILM": null,
+                "WIDE": null,
+                "SQUARE": "/lsci/db/PICTURES/CMS/385700/385794.square.png"
+              }
+            }
+          },
+          "team": {
+            "id": 2,
+            "objectId": 2,
+            "slug": "australia",
+            "name": "Australia",
+            "longName": "Australia",
+            "abbreviation": "AUS",
+            "imageUrl": "/lsci/db/PICTURES/CMS/340400/340493.png",
+            "unofficialName": ""
+          },
+          "matches": 8,
+          "runs": 570,
+          "innings": 15,
+          "average": 47.5,
+          "notouts": 3,
+          "strikerate": 61.68
+        }
+      ],
+      "bestBowlers": [
+        {
+          "player": {
+            "id": 51367,
+            "objectId": 288284,
+            "name": "JR Hazlewood",
+            "longName": "Josh Hazlewood",
+            "mobileName": "Hazlewood",
+            "indexName": "Hazlewood, JR",
+            "battingName": "JR Hazlewood",
+            "fieldingName": "Hazlewood",
+            "slug": "josh-hazlewood",
+            "imageUrl": "/lsci/db/PICTURES/CMS/390900/390976.5.png",
+            "headshotImageUrl": "/lsci/db/PICTURES/CMS/316600/316622.png",
+            "dateOfBirth": {
+              "year": 1991,
+              "month": 1,
+              "date": 8
+            },
+            "dateOfDeath": null,
+            "gender": "M",
+            "battingStyles": [
+              "lhb"
+            ],
+            "bowlingStyles": [
+              "rfm"
+            ],
+            "longBattingStyles": [
+              "left-hand bat"
+            ],
+            "longBowlingStyles": [
+              "right-arm fast-medium"
+            ],
+            "image": {
+              "id": 390976,
+              "objectId": 1459662,
+              "slug": "josh-hazlewood-player-portrait",
+              "url": "/lsci/db/PICTURES/CMS/390900/390976.5.png",
+              "width": 160,
+              "height": 136,
+              "caption": "Josh Hazlewood, player portrait",
+              "longCaption": "Josh Hazlewood, player portrait",
+              "credit": "Cricket Australia/Getty Images",
+              "photographer": "Darrian Traynor",
+              "peerUrls": null
+            },
+            "countryTeamId": 2,
+            "playerRoleTypeIds": [
+              4
+            ],
+            "playingRoles": [
+              "bowler"
+            ],
+            "headshotImage": {
+              "id": 316622,
+              "objectId": 1251254,
+              "slug": "josh-hazlewood-player-page-headshot-cutout-2024",
+              "url": "/lsci/db/PICTURES/CMS/316600/316622.png",
+              "width": 600,
+              "height": 436,
+              "caption": "Josh Hazlewood, player page headshot cutout, 2024",
+              "longCaption": "Josh Hazlewood, player page headshot cutout, 2024",
+              "credit": null,
+              "photographer": null,
+              "peerUrls": {
+                "FILM": null,
+                "WIDE": null,
+                "SQUARE": "/lsci/db/PICTURES/CMS/316600/316622.square.png"
+              }
+            }
+          },
+          "team": {
+            "id": 2,
+            "objectId": 2,
+            "slug": "australia",
+            "name": "Australia",
+            "longName": "Australia",
+            "abbreviation": "AUS",
+            "imageUrl": "/lsci/db/PICTURES/CMS/340400/340493.png",
+            "unofficialName": ""
+          },
+          "matches": 5,
+          "wickets": 22,
+          "innings": 10,
+          "average": 15,
+          "economy": 2.8448,
+          "conceded": 330,
+          "balls": 696,
+          "strikerate": 31.63
+        },
+        {
+          "player": {
+            "id": 64244,
+            "objectId": 489889,
+            "name": "PJ Cummins",
+            "longName": "Pat Cummins",
+            "mobileName": "Cummins",
+            "indexName": "Cummins, PJ",
+            "battingName": "PJ Cummins",
+            "fieldingName": "Cummins",
+            "slug": "pat-cummins",
+            "imageUrl": "/lsci/db/PICTURES/CMS/390900/390954.5.png",
+            "headshotImageUrl": "/lsci/db/PICTURES/CMS/316600/316692.png",
+            "dateOfBirth": {
+              "year": 1993,
+              "month": 5,
+              "date": 8
+            },
+            "dateOfDeath": null,
+            "gender": "M",
+            "battingStyles": [
+              "rhb"
+            ],
+            "bowlingStyles": [
+              "rf"
+            ],
+            "longBattingStyles": [
+              "right-hand bat"
+            ],
+            "longBowlingStyles": [
+              "right-arm fast"
+            ],
+            "image": {
+              "id": 390954,
+              "objectId": 1459614,
+              "slug": "pat-cummins-player-portrait",
+              "url": "/lsci/db/PICTURES/CMS/390900/390954.5.png",
+              "width": 160,
+              "height": 136,
+              "caption": "Pat Cummins, player portrait",
+              "longCaption": "Pat Cummins, player portrait",
+              "credit": "Cricket Australia/Getty Images",
+              "photographer": null,
+              "peerUrls": null
+            },
+            "countryTeamId": 2,
+            "playerRoleTypeIds": [
+              4
+            ],
+            "playingRoles": [
+              "bowler"
+            ],
+            "headshotImage": {
+              "id": 316692,
+              "objectId": 1251325,
+              "slug": "pj-cummins-headshot",
+              "url": "/lsci/db/PICTURES/CMS/316600/316692.png",
+              "width": 600,
+              "height": 436,
+              "caption": "PJ Cummins headshot",
+              "longCaption": "PJ Cummins headshot",
+              "credit": null,
+              "photographer": null,
+              "peerUrls": {
+                "FILM": null,
+                "WIDE": null,
+                "SQUARE": null
+              }
+            }
+          },
+          "team": {
+            "id": 2,
+            "objectId": 2,
+            "slug": "australia",
+            "name": "Australia",
+            "longName": "Australia",
+            "abbreviation": "AUS",
+            "imageUrl": "/lsci/db/PICTURES/CMS/340400/340493.png",
+            "unofficialName": ""
+          },
+          "matches": 6,
+          "wickets": 21,
+          "innings": 10,
+          "average": 17.7143,
+          "economy": 2.6383,
+          "conceded": 372,
+          "balls": 846,
+          "strikerate": 40.28
+        }
+      ]
+    }
+  ],
+  "events": [],
+  "source": {
+    "archive": "raw_batch_11.tar.gz",
+    "archive_sha256": "sha256:1b6b18cd190174b30a3a7c13fb99f406f07e4be4f4b0eef3e344080cff4969bc",
+    "scorecard_sha256": "6e8fcb45ae4c0146b0b48e8741baa95c4be82ada0fa228d1cec2c027ad0cd746",
+    "projection": "Player identity/event fields retained; presentation/image metadata omitted."
+  }
+}
