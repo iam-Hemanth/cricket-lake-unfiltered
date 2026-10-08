@@ -1,5 +1,13 @@
 # Cricket Lake Unfiltered — Project Context for Copilot & AI Agents
 
+> **Local source contract repair —8 October2026:** read
+> [CLASSIFICATION_COVERAGE_REPAIR.md](CLASSIFICATION_COVERAGE_REPAIR.md) first.
+> Shared3.3 classification/participants/Hundred/coverage code is repaired locally;
+> collection/reference/workflow policy and published snapshots remain unchanged.
+> The historical valid/quality claims below are not renewed certification. A full
+> frozen unfiltered replay is required before a combined snapshot or app switch.
+
+
 > Feed this file at the start of any session working on `cricket-lake-unfiltered`:
 > In Chat type: `#file:CRICKET_LAKE_UNFILTERED_CONTEXT.md` then your prompt.
 
