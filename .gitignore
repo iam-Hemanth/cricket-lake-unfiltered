@@ -22,3 +22,8 @@ data/matches/
 
 # macOS
 .DS_Store
+
+# Gap analysis outputs (regenerate with scripts/audit_missing.py)
+missing/*.json
+missing/*.csv
+recovered/

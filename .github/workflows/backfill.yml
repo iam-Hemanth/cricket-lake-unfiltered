@@ -1,0 +1,166 @@
+name: Backfill missed matches
+
+# Recovers a known list of missed matches. Two sources are supported:
+#   * a queue file produced by scripts/audit_missing.py (missing/missing_matches.json)
+#   * the failure logs the extractor already wrote (failed_matches.json)
+#
+# Output is packaged as `matches_batch_recovery_<stamp>.tar.gz` on the existing
+# `data-unfiltered-batches` release, so `consolidate_full_lake.yml` picks it up
+# without any change to its download glob.
+
+on:
+  workflow_dispatch:
+    inputs:
+      queue:
+        description: 'Path to a JSON list of match ids'
+        required: true
+        default: 'missing/missing_matches.json'
+      limit:
+        description: 'Max matches this run (0 = no cap)'
+        required: false
+        default: '0'
+      chunk_size:
+        description: 'Matches per parallel chunk'
+        required: false
+        default: '100'
+      quarantine:
+        description: 'Keep matches that fail validation (flagged, not dropped)'
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backfill
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      total: ${{ steps.plan.outputs.total }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build chunk matrix
+        id: plan
+        env:
+          QUEUE: ${{ github.event.inputs.queue }}
+          LIMIT: ${{ github.event.inputs.limit }}
+          CHUNK: ${{ github.event.inputs.chunk_size }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, math, os
+          queue = json.load(open(os.environ["QUEUE"]))
+          ids = [str(m["match_id"]) if isinstance(m, dict) else str(m) for m in queue]
+          limit = int(os.environ["LIMIT"])
+          if limit:
+              ids = ids[:limit]
+          chunk = int(os.environ["CHUNK"])
+          chunks = math.ceil(len(ids) / chunk) if ids else 0
+          matrix = [{"chunk": i, "size": chunk} for i in range(chunks)]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"matrix={json.dumps(matrix)}\n")
+              fh.write(f"total={len(ids)}\n")
+          print(f"{len(ids)} ids -> {chunks} chunks")
+          PY
+
+      - name: Persist queue as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backfill-queue
+          path: ${{ github.event.inputs.queue }}
+          retention-days: 7
+
+  extract:
+    needs: plan
+    if: needs.plan.outputs.total != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        chunk: ${{ fromJson(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: backfill-queue
+          path: queue
+
+      - name: Extract chunk ${{ matrix.chunk.chunk }}
+        env:
+          AKAMAI_KEY: ${{ secrets.AKAMAI_KEY }}
+        run: |
+          set -euo pipefail
+          QUEUE=$(ls queue/**/*.json queue/*.json 2>/dev/null | head -1)
+          OUT="out/chunk_${{ matrix.chunk.chunk }}"
+          mkdir -p "$OUT" raw/chunk_${{ matrix.chunk.chunk }}
+          FLAG=""
+          if [ "${{ github.event.inputs.quarantine }}" = "true" ]; then FLAG="--allow-validation-failures"; fi
+          python extract.py \
+            --ids-file "$QUEUE" \
+            --chunk-index ${{ matrix.chunk.chunk }} \
+            --chunk-size ${{ matrix.chunk.size }} \
+            --delay 0.3 \
+            $FLAG \
+            --output-dir "$OUT" \
+            --raw-dir "raw/chunk_${{ matrix.chunk.chunk }}"
+
+      - name: Pack
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "out/chunk_${{ matrix.chunk.chunk }}"
+          tar -czf "recovery_chunk_${{ matrix.chunk.chunk }}.tar.gz" \
+              --exclude=failed_matches.json -C "out/chunk_${{ matrix.chunk.chunk }}" .
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recovery-chunk-${{ matrix.chunk.chunk }}
+          path: recovery_chunk_${{ matrix.chunk.chunk }}.tar.gz
+          retention-days: 30
+
+  publish:
+    needs: [plan, extract]
+    if: always() && needs.extract.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: recovery-chunk-*
+          merge-multiple: true
+          path: chunks
+
+      - name: Merge and upload batch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p merged
+          for t in chunks/*.tar.gz; do tar -xzf "$t" -C merged; done
+          COUNT=$(find merged -name '*.json' | wc -l | tr -d ' ')
+          echo "recovered: $COUNT"
+          STAMP=$(date -u +%Y%m%dT%H)
+          tar -czf "matches_batch_recovery_${STAMP}.tar.gz" -C merged .
+          gh release view data-unfiltered-batches >/dev/null 2>&1 || \
+            gh release create data-unfiltered-batches --title "Batch archives" --notes "Recovery and scheduled batches." --latest=false
+          gh release upload data-unfiltered-batches \
+            "matches_batch_recovery_${STAMP}.tar.gz" --clobber
+          echo "### Backfill" >> "$GITHUB_STEP_SUMMARY"
+          echo "Recovered $COUNT matches into \`matches_batch_recovery_${STAMP}.tar.gz\`." >> "$GITHUB_STEP_SUMMARY"

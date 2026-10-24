@@ -82,6 +82,7 @@ def scan_and_consolidate(
     missing_non_striker_deliveries = 0
     legacy_unverified_matches = 0
     source_only_timed_out_wickets = 0
+    quarantined_matches = 0
 
     processed_mids: List[str] = []
 
@@ -94,7 +95,12 @@ def scan_and_consolidate(
             failed_matches_all[mid] = f"Corrupt JSON: {e}"
             continue
 
-        validation_errors = validate_inventory_candidate(data)
+        # Quarantined matches were already assessed and deliberately retained;
+        # re-validating here would silently drop them a second time.
+        is_quarantined = (data.get("meta") or {}).get("validation_status") == "failed"
+        if is_quarantined:
+            quarantined_matches += 1
+        validation_errors = [] if is_quarantined else validate_inventory_candidate(data)
         if validation_errors:
             failed_matches_all[mid] = "; ".join(validation_errors[:5])
             logger.warning("Rejected candidate %s: %s",mid,failed_matches_all[mid])
@@ -212,6 +218,7 @@ def scan_and_consolidate(
             "mapping_rate_pct": round(len(mapped_players) / len(unique_players) * 100, 2) if unique_players else 0.0
         },
         "coverage": {
+            "quarantined_matches": quarantined_matches,
             "zero_delivery_matches": zero_delivery_matches,
             "legacy_unverified_matches":legacy_unverified_matches,
             "missing_non_striker_deliveries": missing_non_striker_deliveries,

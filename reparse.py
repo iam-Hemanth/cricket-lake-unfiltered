@@ -60,6 +60,11 @@ def main():
     parser.add_argument("--match-ids", type=str, default=None, help="Comma-separated match IDs to reparse")
     parser.add_argument("--verify-determinism", action="store_true", help="Assert offline parser determinism")
     parser.add_argument("--strict", action="store_true", help="Fail with non-zero exit code if any match fails validation")
+    parser.add_argument("--ids-file", type=str, default=None, help="JSON/text file of match ids to reparse")
+    parser.add_argument("--chunk-index", type=int, default=None)
+    parser.add_argument("--chunk-size", type=int, default=None)
+    parser.add_argument("--allow-validation-failures", action="store_true",
+                        help="Quarantine instead of drop invalid matches (writes with validation_status=failed)")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent
@@ -74,8 +79,15 @@ def main():
     player_profiles, people_registry, venue_map = load_references(repo_root)
 
     # Determine match directories to reparse
-    if args.match_ids:
-        target_mids = [m.strip() for m in args.match_ids.split(",") if m.strip()]
+    if args.match_ids or args.ids_file:
+        if args.ids_file:
+            data = json.loads(Path(args.ids_file).read_text(encoding="utf-8"))
+            target_mids = [str(x["match_id"]) if isinstance(x, dict) else str(x) for x in data]
+        else:
+            target_mids = [m.strip() for m in args.match_ids.split(",") if m.strip()]
+        if args.chunk_size:
+            lo = (args.chunk_index or 0) * args.chunk_size
+            target_mids = target_mids[lo:lo + args.chunk_size]
         match_dirs = [raw_dir / mid for mid in target_mids if (raw_dir / mid).is_dir()]
     else:
         match_dirs = sorted([p for p in raw_dir.iterdir() if p.is_dir() and (p / "scorecard.json.gz").exists()])
@@ -84,6 +96,7 @@ def main():
 
     succeeded = 0
     failed = 0
+    quarantined_ids: set[str] = set()
     determinism_failures = 0
     determinism_checks = 0
     failed_matches: Dict[str, str] = {}
@@ -141,10 +154,16 @@ def main():
         validation_errors = validate_match_data(match_v3, (details.get("content") or {}).get("innings") or [])
 
         if validation_errors:
-            logger.warning(f"Validation failed for match {mid}: {validation_errors[:2]}")
-            failed_matches[mid] = f"Validation errors: {'; '.join(validation_errors[:3])}"
-            failed += 1
-            continue
+            if not args.allow_validation_failures:
+                logger.warning(f"Validation failed for match {mid}: {validation_errors[:2]}")
+                failed_matches[mid] = f"Validation errors: {'; '.join(validation_errors[:3])}"
+                failed += 1
+                continue
+            logger.warning(f"Quarantining match {mid} ({len(validation_errors)} validation errors)")
+            match_v3.setdefault("meta", {})
+            match_v3["meta"]["validation_status"] = "failed"
+            match_v3["meta"]["validation_errors"] = validation_errors[:25]
+            quarantined_ids.add(str(mid))
 
         # Write output file
         out_file = output_dir / f"{mid}.json"
@@ -152,14 +171,17 @@ def main():
         with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(match_v3, f, indent=2, ensure_ascii=False)
         temp_file.replace(out_file)
-        succeeded += 1
+        if str(mid) in quarantined_ids:
+            pass
+        else:
+            succeeded += 1
 
     if failed_matches:
         with open(output_dir / "failed_matches.json", "w", encoding="utf-8") as f:
             json.dump(failed_matches, f, indent=2)
 
     logger.info("=" * 60)
-    logger.info(f"Offline Reparse Complete: {succeeded} succeeded | {failed} failed")
+    logger.info(f"Offline Reparse Complete: {succeeded} succeeded | {len(quarantined_ids)} quarantined | {failed} failed")
     if args.verify_determinism:
         logger.info(f"Determinism Checks: {determinism_checks - determinism_failures}/{determinism_checks} passed")
     logger.info("=" * 60)

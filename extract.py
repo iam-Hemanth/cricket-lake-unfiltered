@@ -117,6 +117,16 @@ def main():
     parser.add_argument("--delay", type=float, default=0.6, help="Base delay between requests in seconds")
     parser.add_argument("--skip-existing", action="store_true", help="Skip already-extracted matches")
     parser.add_argument("--circuit-breaker-limit", type=int, default=5, help="Circuit breaker trip threshold")
+    parser.add_argument(
+        "--allow-validation-failures",
+        action="store_true",
+        help="Quarantine instead of drop: write matches that fail validation with "
+             "meta.validation_status='failed' plus the error list",
+    )
+    parser.add_argument("--chunk-index", type=int, default=None,
+                        help="0-based chunk to take after the id list is resolved (any source)")
+    parser.add_argument("--chunk-size", type=int, default=None,
+                        help="Chunk size; applies to --ids-file/--match-ids too")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent
@@ -131,12 +141,17 @@ def main():
         auditor = CricsheetAuditor(str(repo_root / "data" / "people.csv"))
 
     target_ids = get_target_match_ids(args, repo_root)
+    if args.chunk_size:
+        lo = (args.chunk_index or 0) * args.chunk_size
+        target_ids = target_ids[lo:lo + args.chunk_size]
+        logger.info(f"Sliced to chunk {args.chunk_index}: [{lo}:{lo + args.chunk_size}] -> {len(target_ids)} ids")
     total_targets = len(target_ids)
     logger.info(f"Starting extraction of {total_targets} matches...")
 
     client = CricinfoClient(breaker_threshold=args.circuit_breaker_limit)
 
     succeeded = 0
+    quarantined = 0
     failed_matches: Dict[str, str] = {}
     skipped = 0
 
@@ -224,9 +239,15 @@ def main():
             validation_errors = validate_match_data(match_v3,sc_inns)
 
             if validation_errors:
-                logger.warning(f"Validation failed for match {mid} ({len(validation_errors)} errors): {validation_errors[:2]}")
-                failed_matches[mid] = f"Validation errors: {'; '.join(validation_errors[:3])}"
-                continue
+                if not args.allow_validation_failures:
+                    logger.warning(f"Validation failed for match {mid} ({len(validation_errors)} errors): {validation_errors[:2]}")
+                    failed_matches[mid] = f"Validation errors: {'; '.join(validation_errors[:3])}"
+                    continue
+                # Quarantine path: keep the data, publish the defect, let consumers filter.
+                logger.warning(f"Quarantining match {mid} ({len(validation_errors)} validation errors)")
+                match_v3.setdefault("meta", {})
+                match_v3["meta"]["validation_status"] = "failed"
+                match_v3["meta"]["validation_errors"] = validation_errors[:25]
 
             # 5. Optional Cricsheet Audit
             if auditor and args.cricsheet_dir:
@@ -247,8 +268,12 @@ def main():
 
             # 6. Atomic write
             atomic_write_json(out_file, match_v3)
-            succeeded += 1
-            logger.info(f"Successfully extracted & validated match {mid} -> {out_file.name}")
+            if match_v3.get("meta", {}).get("validation_status") == "failed":
+                quarantined += 1
+                logger.info(f"Quarantined match {mid} -> {out_file.name}")
+            else:
+                succeeded += 1
+                logger.info(f"Successfully extracted & validated match {mid} -> {out_file.name}")
 
             # Jittered polite backoff
             time.sleep(args.delay + random.uniform(0.1, 0.4))
@@ -272,9 +297,15 @@ def main():
 
         logger.info("=" * 60)
         logger.info(f"Extraction Batch Complete.")
-        logger.info(f"Total: {total_targets} | Succeeded: {succeeded} | Skipped: {skipped} | Failed: {len(failed_matches)}")
+        logger.info(
+            f"Total: {total_targets} | Succeeded: {succeeded} | Quarantined: {quarantined} "
+            f"| Skipped: {skipped} | Failed: {len(failed_matches)}"
+        )
         logger.info("=" * 60)
 
+    # A batch that fetched nothing but errors must not look green in CI.
+    if succeeded == 0 and quarantined == 0 and skipped == 0 and total_targets > 0:
+        sys.exit(3)
     sys.exit(0)
 
 
