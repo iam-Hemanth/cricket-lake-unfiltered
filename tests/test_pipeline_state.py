@@ -80,6 +80,38 @@ class UpdateStateTests(unittest.TestCase):
         self.assertEqual(state["abandoned"]["9"]["attempts"], 5)
         self.assertEqual(state["abandoned"]["9"]["last_error"], "validation")
 
+    def test_validation_defect_gets_shorter_retry_budget_than_live_match(self):
+        validation_error = "Validation errors: running score mismatch"
+        _, state, _ = compute_state(
+            known_prev=[],
+            state_prev={"retry": {"9": {"attempts": 4, "manifest": entry(9)}}},
+            full_entries=[entry(9)],
+            planned_entries=[entry(9)],
+            succeeded=set(),
+            failures={"9": validation_error},
+            now="2026-10-26T00:00:00Z",
+            stamp="20261026T00",
+            max_attempts=20,
+            validation_max_attempts=5,
+        )
+        self.assertNotIn("9", state["retry"])
+        self.assertEqual(state["abandoned"]["9"]["attempt_limit"], 5)
+
+        _, state, _ = compute_state(
+            known_prev=[],
+            state_prev={"retry": {"10": {"attempts": 5, "manifest": entry(10)}}},
+            full_entries=[entry(10)],
+            planned_entries=[entry(10)],
+            succeeded=set(),
+            failures={"10": "Construction error: Match 10: uncompleted source match state LIVE"},
+            now="2026-10-26T00:00:00Z",
+            stamp="20261026T00",
+            max_attempts=20,
+            validation_max_attempts=5,
+        )
+        self.assertIn("10", state["retry"])
+        self.assertNotIn("10", state["abandoned"])
+
     def test_collect_succeeded_ignores_failure_logs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

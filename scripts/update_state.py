@@ -7,7 +7,9 @@ chunk failed, so failed matches were never retried. This script instead:
 
   * marks only ids that produced a JSON file as known;
   * keeps everything else in a persistent ``retry`` queue (with the original
-    manifest entry) until it succeeds or hits ``--max-attempts``;
+    manifest entry) until it succeeds or hits its attempt limit;
+  * retries transient failures (live match, HTTP 403/429/5xx, network) for
+    ``--max-attempts``, but gives data defects only ``--validation-max-attempts``;
   * records permanently failed ids under ``abandoned`` instead of silently
     pretending they are in the lake.
 """
@@ -41,6 +43,19 @@ def collect_succeeded(chunks_dir: Path) -> set[str]:
             if p.stem.isdigit() and p.name != "failed_matches.json"}
 
 
+TRANSIENT_ERROR_MARKERS = (
+    "uncompleted source match state",
+    "http 403", "http 429", "http 500", "http 502", "http 503", "http 504",
+    "max retries", "timed out", "timeout", "connection", "circuit breaker",
+    "no failure record",
+)
+
+
+def is_transient_error(error: str | None) -> bool:
+    text = (error or "").lower()
+    return any(marker in text for marker in TRANSIENT_ERROR_MARKERS)
+
+
 def collect_failures(failed_dir: Path) -> dict[str, str]:
     failures: dict[str, str] = {}
     if not failed_dir.exists():
@@ -66,6 +81,7 @@ def compute_state(
     now: str,
     stamp: str | None,
     max_attempts: int,
+    validation_max_attempts: int = 5,
 ) -> tuple[set[str], dict, dict]:
     known = {str(x) for x in known_prev}
     state = dict(state_prev or {})
@@ -109,9 +125,12 @@ def compute_state(
             record["deferred"] = True
 
     for mid in list(retry):
-        if int(retry[mid].get("attempts", 0)) >= max_attempts:
+        record = retry[mid]
+        limit = max_attempts if is_transient_error(record.get("last_error")) else validation_max_attempts
+        if int(record.get("attempts", 0)) >= limit:
             record = retry.pop(mid)
             record["abandoned_at"] = now
+            record["attempt_limit"] = limit
             record["last_error"] = record.get("last_error", "max attempts reached")
             abandoned[mid] = record
             known.add(mid)
@@ -148,7 +167,10 @@ def main() -> int:
     parser.add_argument("--chunks-dir", default="merged/raw")
     parser.add_argument("--failed-dir", default="failed")
     parser.add_argument("--stamp", default=None)
-    parser.add_argument("--max-attempts", type=int, default=20)
+    parser.add_argument("--max-attempts", type=int, default=20,
+                        help="Attempts for transient failures (live match, HTTP, network)")
+    parser.add_argument("--validation-max-attempts", type=int, default=5,
+                        help="Attempts for data defects that a refetch will not fix")
     parser.add_argument("--now", default=None, help="Override timestamp (tests)")
     args = parser.parse_args()
 
@@ -170,6 +192,7 @@ def main() -> int:
         now=now,
         stamp=args.stamp,
         max_attempts=args.max_attempts,
+        validation_max_attempts=args.validation_max_attempts,
     )
 
     (state_dir / "known_ids.json").write_text(
