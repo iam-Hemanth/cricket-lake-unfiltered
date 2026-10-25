@@ -102,7 +102,7 @@ jobs:
       - name: Display Lake Summary
         run: |
           cat master_unfiltered_lake/lake_manifest.json
-          echo "### 🏏 Unfiltered Master Cricket Data Lake Summary (18,400+ Matches)" >> $GITHUB_STEP_SUMMARY
+          echo "### 🏏 Unfiltered Master Cricket Data Lake Summary (published matches)" >> $GITHUB_STEP_SUMMARY
           echo '```json' >> $GITHUB_STEP_SUMMARY
           cat master_unfiltered_lake/lake_manifest.json >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
