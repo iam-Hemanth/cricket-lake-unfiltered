@@ -2,8 +2,9 @@ name: Consolidate Full 18,400+ Match Unfiltered Lake
 
 on:
   workflow_dispatch:
-  # Nightly rebuild: folds every batch (including recovery batches) into the
-  # master release. The 6-hourly job only publishes deltas.
+  # Nightly rebuild: folds every batch (including recovery batches), the
+  # curated lake, and every 6-hourly delta window into the master release.
+  # Deltas are append-only and retained, so a rebuild never loses matches.
   schedule:
     - cron: '30 2 * * *'
 
@@ -62,12 +63,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Download 6-hourly Deltas (iam-Hemanth/cricket-lake-unfiltered)
+        run: |
+          set -euo pipefail
+          mkdir -p delta_windows
+          if gh release view data-unfiltered-deltas >/dev/null 2>&1; then
+            gh release download data-unfiltered-deltas -p "lake_delta_*.tar.gz" --dir delta_windows
+          fi
+          shopt -s nullglob
+          for arch in delta_windows/lake_delta_*.tar.gz; do
+            echo "Unpacking $arch..."
+            tar -xzf "$arch" -C master_all_matches
+          done
+          DELTA_WINDOWS=$(find delta_windows -name "lake_delta_*.tar.gz" | wc -l | tr -d ' ')
+          TOTAL_COUNT=$(find master_all_matches -name "*.json" ! -name "failed_matches.json" ! -name "lake_manifest.json" | wc -l | tr -d ' ')
+          echo "Folded $DELTA_WINDOWS delta windows into $TOTAL_COUNT unique matches."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Consolidate Master Lake & Generate Manifest
         run: |
+          # --published-only keeps the manifest in sync with the catalog: the
+          # public archives exclude quarantined matches, so they must not be
+          # counted in total_matches/deliveries either.
           python consolidate.py \
             --input-dirs master_all_matches \
             --output-dir master_unfiltered_lake/matches \
-            --manifest-path master_unfiltered_lake/lake_manifest.json
+            --manifest-path master_unfiltered_lake/lake_manifest.json \
+            --published-only
 
       - name: Build Index Catalog & Distribution Archives
         run: |

@@ -33,7 +33,8 @@ def scan_and_consolidate(
     input_dirs: List[Path],
     output_dir: Path,
     manifest_file: Path,
-    archive_file: Optional[Path] = None
+    archive_file: Optional[Path] = None,
+    published_only: bool = False
 ) -> Dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -83,6 +84,7 @@ def scan_and_consolidate(
     legacy_unverified_matches = 0
     source_only_timed_out_wickets = 0
     quarantined_matches = 0
+    invalid_matches = 0
 
     processed_mids: List[str] = []
 
@@ -100,8 +102,13 @@ def scan_and_consolidate(
         is_quarantined = (data.get("meta") or {}).get("validation_status") == "failed"
         if is_quarantined:
             quarantined_matches += 1
+            # The public catalog rejects quarantined files, so a published-only
+            # manifest must not count them (or their balls/runs) either.
+            if published_only:
+                continue
         validation_errors = [] if is_quarantined else validate_inventory_candidate(data)
         if validation_errors:
+            invalid_matches += 1
             failed_matches_all[mid] = "; ".join(validation_errors[:5])
             logger.warning("Rejected candidate %s: %s",mid,failed_matches_all[mid])
             continue
@@ -218,7 +225,10 @@ def scan_and_consolidate(
             "mapping_rate_pct": round(len(mapped_players) / len(unique_players) * 100, 2) if unique_players else 0.0
         },
         "coverage": {
+            "publication_mode": "published_only" if published_only else "include_quarantined",
             "quarantined_matches": quarantined_matches,
+            "quarantined_published": 0 if published_only else quarantined_matches,
+            "invalid_matches": invalid_matches,
             "zero_delivery_matches": zero_delivery_matches,
             "legacy_unverified_matches":legacy_unverified_matches,
             "missing_non_striker_deliveries": missing_non_striker_deliveries,
@@ -256,6 +266,8 @@ def main():
     parser.add_argument("--output-dir", type=str, default="data/master_matches", help="Directory for consolidated match JSONs")
     parser.add_argument("--manifest-path", type=str, default="data/lake_manifest.json", help="Path to write lake_manifest.json")
     parser.add_argument("--archive-path", type=str, default=None, help="Optional path to write consolidated .tar.gz archive")
+    parser.add_argument("--published-only", action="store_true",
+                        help="Exclude quarantined files so the manifest matches the public catalog")
     args = parser.parse_args()
 
     input_paths = [Path(p) for p in args.input_dirs]
@@ -267,7 +279,8 @@ def main():
         input_dirs=input_paths,
         output_dir=out_dir,
         manifest_file=manifest_p,
-        archive_file=archive_p
+        archive_file=archive_p,
+        published_only=args.published_only
     )
 
 

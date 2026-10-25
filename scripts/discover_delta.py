@@ -50,6 +50,25 @@ CLASSES = [
 DATE_RANGE_RE = re.compile(r"([A-Za-z]{3})\s+(\d{1,2})(?:\s*-\s*(\d{1,2}))?,\s*(\d{4})")
 ISO_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 
+# Statsguru lists live multi-day matches alongside completed ones; such rows
+# have no result text yet. Only schedule matches that actually finished.
+RESULT_MARKERS = (
+    "won by", "drawn", "tied", "no result", "abandoned", "cancelled",
+    "awarded", "forfeit", "forfait", "walkover",
+)
+NOT_STARTED_MARKERS = ("without a ball bowled",)
+
+
+def result_index(cells: list[str]) -> int | None:
+    """Index of the result/margin cell, or None when the match has not finished."""
+    joined = " ".join(c.lower() for c in cells)
+    if any(marker in joined for marker in NOT_STARTED_MARKERS):
+        return None
+    for idx, cell in enumerate(cells):
+        if any(marker in cell.lower() for marker in RESULT_MARKERS):
+            return idx
+    return None
+
 
 def parse_date(raw: str) -> str | None:
     """Parse Statsguru date cells into YYYY-MM-DD.
@@ -143,6 +162,7 @@ def scrape_statsguru(year: int, since: str) -> dict[str, dict]:
 
         rows = re.findall(r"<tr[^>]*>(.*?)</tr>", table.group(1), re.DOTALL)
         n = 0
+        unfinished = 0
         for tr in rows[1:]:
             mid_m = re.search(r"/ci/engine/match/(\d+)\.html", tr)
             if not mid_m:
@@ -154,18 +174,24 @@ def scrape_statsguru(year: int, since: str) -> dict[str, dict]:
             d = find_date(cells)
             if not d or d < since:
                 continue
+            ri = result_index(cells)
+            if ri is None:
+                unfinished += 1
+                continue
+            winner = cells[2].strip() if len(cells) > 2 else ""
             found[mid_m.group(1)] = {
                 "match_id": mid_m.group(1),
                 "teams": [cells[0], cells[1]],
-                "winner": cells[2],
-                "result": cells[3],
+                "winner": None if winner in ("", "-", "—") else winner,
+                "result": cells[ri],
                 "format": label,
                 "season": str(year),
                 "date": d,
                 "competition": None,
             }
             n += 1
-        logger.info("class %s (%s) %s: %d matches since %s", cls, label, year, n, since)
+        logger.info("class %s (%s) %s: %d completed matches since %s (%d unfinished skipped)",
+                    cls, label, year, n, since, unfinished)
 
     return found
 

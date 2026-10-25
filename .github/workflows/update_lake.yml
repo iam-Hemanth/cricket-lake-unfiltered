@@ -74,8 +74,9 @@ jobs:
           set -euo pipefail
           mkdir -p .state
           if gh release view "$STATE_TAG" >/dev/null 2>&1; then
-            gh release download "$STATE_TAG" -p 'lake_state.json' --dir .state --clobber || true
-            gh release download "$STATE_TAG" -p 'known_ids.json'  --dir .state --clobber || true
+            # A transient download failure must not look like an empty state:
+            # that would mark thousands of matches as new again.
+            gh release download "$STATE_TAG" --dir .state --clobber
           else
             echo "No state release yet - first run will use the published index."
           fi
@@ -87,8 +88,12 @@ jobs:
         run: |
           set -euo pipefail
           # The index is the authoritative "what is already in the lake" list.
-          gh release download data-unfiltered-master -p 'matches_index.csv' \
-            --dir .state --clobber 2>/dev/null || echo "::warning::matches_index.csv unavailable - relying on known_ids.json only"
+          if gh release view data-unfiltered-master >/dev/null 2>&1; then
+            gh release download data-unfiltered-master -p 'matches_index.csv' \
+              --dir .state --clobber
+          else
+            echo "::warning::matches_index.csv unavailable - relying on known_ids.json only"
+          fi
 
       - name: Resolve start date
         id: since
@@ -115,6 +120,13 @@ jobs:
             --output data/manifest_delta.json \
             --summary data/discovery_summary.json
 
+      - name: Merge retry queue
+        run: |
+          set -euo pipefail
+          python scripts/merge_retry_queue.py \
+            --manifest data/manifest_delta.json \
+            --state .state/lake_state.json
+
       - name: Plan extraction chunks
         id: plan
         run: |
@@ -124,12 +136,15 @@ jobs:
           cap = int(os.environ.get("MAX_MATCHES") or 400)
           manifest = json.load(open("data/manifest_delta.json"))
           summary = json.load(open("data/discovery_summary.json"))
+          # Keep the full list: publish needs it to carry capped or failed
+          # matches into the retry queue instead of losing them.
+          json.dump(manifest, open("data/manifest_full.json", "w"), indent=2)
           if not manifest:
               print("nothing new to extract")
               open(os.environ["GITHUB_OUTPUT"], "a").write("has_new=false\ncount=0\nmatrix=[]\n")
               raise SystemExit(0)
           if len(manifest) > cap:
-              print(f"capping {len(manifest)} -> {cap} (backlog carried to next run)")
+              print(f"capping {len(manifest)} -> {cap} (backlog carried via retry queue)")
               manifest = manifest[:cap]
               json.dump(manifest, open("data/manifest_delta.json", "w"), indent=2)
           size = 40
@@ -151,6 +166,7 @@ jobs:
           name: manifest-delta
           path: |
             data/manifest_delta.json
+            data/manifest_full.json
             data/discovery_summary.json
           retention-days: 7
 
@@ -261,6 +277,13 @@ jobs:
           name: manifest-delta
           path: data
 
+      - name: Collect failure logs
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: failed-chunk-*
+          path: failed
+
       - name: Merge delta
         run: |
           set -euo pipefail
@@ -272,69 +295,52 @@ jobs:
           done
           COUNT=$(find merged/raw -name '*.json' ! -name 'failed_matches.json' | wc -l | tr -d ' ')
           echo "delta matches: $COUNT"
-          if [ "$COUNT" -eq 0 ]; then echo "::warning::no matches extracted this window"; fi
           STAMP=$(date -u +%Y%m%dT%H)
           echo "STAMP=$STAMP" >> "$GITHUB_ENV"
           echo "COUNT=$COUNT" >> "$GITHUB_ENV"
-          tar -czf "lake_delta_${STAMP}.tar.gz" -C merged/raw .
-          sha256sum "lake_delta_${STAMP}.tar.gz" | tee checksums.txt
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::warning::no matches extracted this window"
+            echo "HAS_DELTA=0" >> "$GITHUB_ENV"
+          else
+            tar -czf "lake_delta_${STAMP}.tar.gz" -C merged/raw .
+            sha256sum "lake_delta_${STAMP}.tar.gz" | tee checksums.txt
+            echo "HAS_DELTA=1" >> "$GITHUB_ENV"
+          fi
 
       - name: Publish delta asset
+        if: env.HAS_DELTA == '1'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           gh release view "$DELTA_TAG" >/dev/null 2>&1 || \
             gh release create "$DELTA_TAG" --title "Lake deltas (6-hourly)" \
-              --notes "Append-only delta windows produced by update_lake.yml." --latest=false
+              --notes "Append-only delta windows produced by update_lake.yml. Kept forever: consolidate_full_lake.yml rebuilds the master from these." --latest=false
           gh release upload "$DELTA_TAG" \
             "lake_delta_${STAMP}.tar.gz" checksums.txt data/manifest_delta.json --clobber
 
-      - name: Update state (known ids + last success)
+      - name: Update state (published ids + retry queue)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p .state
-          gh release download "$STATE_TAG" -p 'known_ids.json' --dir .state --clobber 2>/dev/null || true
-          gh release download "$STATE_TAG" -p 'lake_state.json' --dir .state --clobber 2>/dev/null || true
-          python - <<'PY'
-          import json, os
-          known = set()
-          if os.path.exists(".state/known_ids.json"):
-              known = set(map(str, json.load(open(".state/known_ids.json"))))
-          delta = json.load(open("data/manifest_delta.json"))
-          known.update(str(m["match_id"]) for m in delta)
-          json.dump(sorted(known), open(".state/known_ids.json", "w"))
-          state = {}
-          if os.path.exists(".state/lake_state.json"):
-              state = json.load(open(".state/lake_state.json"))
-          state.update({
-              "last_success_utc": __import__("datetime").datetime.utcnow().isoformat() + "Z",
-              "last_delta_count": len(delta),
-              "known_ids": len(known),
-              "last_delta_asset": os.environ["STAMP"],
-          })
-          json.dump(state, open(".state/lake_state.json", "w"), indent=2)
-          print(json.dumps(state, indent=2))
-          PY
+          if gh release view "$STATE_TAG" >/dev/null 2>&1; then
+            gh release download "$STATE_TAG" --dir .state --clobber
+          fi
+          python scripts/update_state.py \
+            --state-dir .state \
+            --manifest-full data/manifest_full.json \
+            --manifest-planned data/manifest_delta.json \
+            --chunks-dir merged/raw \
+            --failed-dir failed \
+            --stamp "$STAMP" \
+            --max-attempts 20
           gh release view "$STATE_TAG" >/dev/null 2>&1 || \
             gh release create "$STATE_TAG" --title "Pipeline state" \
               --notes "Machine state for update_lake.yml. Do not delete." --latest=false
           gh release upload "$STATE_TAG" .state/known_ids.json .state/lake_state.json --clobber
 
-      - name: Prune delta assets older than 30 days
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          CUTOFF=$(date -u -d '30 days ago' +%Y-%m-%dT%H)
-          gh release view "$DELTA_TAG" --json assets --jq '.assets[].name' \
-            | grep -E '^lake_delta_[0-9]{8}T[0-9]{2}\.tar\.gz$' \
-            | while read -r a; do
-                ts=${a#lake_delta_}; ts=${ts%.tar.gz}
-                if [[ "$ts" < "$CUTOFF" ]]; then gh release delete-asset "$DELTA_TAG" "$a" -y; fi
-              done
 
   # ------------------------------------------------------------------ notify
   notify-failure:

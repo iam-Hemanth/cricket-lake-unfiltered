@@ -15,6 +15,25 @@ from src.client import CricinfoClient
 
 BASE_URL = "https://hs-consumer-api.cricinfo.com"
 
+
+def canonical_match_payload(payload: Optional[dict]) -> Optional[dict]:
+    """Normalize the two shapes ESPN serves for a match page.
+
+    Older stats pages put ``match`` and ``content`` at the top of
+    ``appPageProps.data``. Newer pages wrap them one level deeper as
+    ``{"data": {"match": ..., "content": ...}, "sponsoredFeatures": ...}``.
+    The constructor only understands the flat shape, so unwrap the new one.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    if isinstance(payload.get("content"), dict) and isinstance(payload.get("match"), dict):
+        return payload
+    nested = payload.get("data")
+    if isinstance(nested, dict) and isinstance(nested.get("content"), dict):
+        return nested
+    return payload
+
+
 def save_raw_payload(
     raw_match_dir: Path,
     filename: str,
@@ -77,7 +96,7 @@ def fetch_match_details(
                 save_raw_payload(raw_dir / str(match_id), "scorecard.json", content_bytes, url, r.status_code)
             try:
                 data = json.loads(content_bytes.decode("utf-8"))
-                return data, None
+                return canonical_match_payload(data), None
             except Exception as e:
                 return None, f"JSON parse error: {e}"
 
@@ -108,7 +127,7 @@ def fetch_match_details(
         if raw_dir:
             save_raw_payload(raw_dir / str(match_id), "scorecard.json", content_bytes, engine_url, r.status_code)
 
-        return app_props, None
+        return canonical_match_payload(app_props), None
     except Exception as e:
         return None, f"JSON parse error from __NEXT_DATA__: {e}"
 
@@ -192,7 +211,7 @@ def load_raw_match_payloads(raw_match_dir: Path) -> Tuple[Optional[dict], Dict[i
 
     try:
         with gzip.open(sc_path, "rt", encoding="utf-8") as f:
-            raw_details = json.load(f)
+            raw_details = canonical_match_payload(json.load(f))
     except Exception as e:
         return None, {}, f"Failed to read scorecard.json.gz: {e}"
 

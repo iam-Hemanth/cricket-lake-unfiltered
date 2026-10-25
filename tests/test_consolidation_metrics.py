@@ -82,5 +82,22 @@ class MetricsTests(unittest.TestCase):
             result=scan_and_consolidate([source],root/'out',root/'manifest.json')
         self.assertEqual(result['total_matches'],0)
 
+    def test_published_only_manifest_matches_catalog_exclusions(self):
+        clean,_=construct_match_v3('104',details(),{1:[ball()]},{},{},{})
+        quarantined,_=construct_match_v3('105',details(),{1:[ball()]},{},{},{})
+        quarantined['meta']['validation_status']='failed'
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);source=root/'source';source.mkdir()
+            (source/'104.json').write_text(json.dumps(clean))
+            (source/'105.json').write_text(json.dumps(quarantined))
+            result=scan_and_consolidate(
+                [source],root/'out',root/'manifest.json',published_only=True
+            )
+            self.assertFalse((root/'out/105.json').exists())
+        self.assertEqual(result['total_matches'],1)
+        self.assertEqual(result['coverage']['quarantined_matches'],1)
+        self.assertEqual(result['coverage']['quarantined_published'],0)
+        self.assertEqual(result['coverage']['publication_mode'],'published_only')
+
 
 if __name__=='__main__':unittest.main()
