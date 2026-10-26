@@ -36,6 +36,24 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Wait for any active update run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 240); do
+            active=$(gh run list --workflow=update_lake.yml --status in_progress --json databaseId --jq 'length')
+            queued=$(gh run list --workflow=update_lake.yml --status queued --json databaseId --jq 'length')
+            if [ "$active" = "0" ] && [ "$queued" = "0" ]; then
+              echo "No active or queued update runs."
+              exit 0
+            fi
+            echo "Waiting for update runs: active=$active queued=$queued (attempt $attempt)"
+            sleep 30
+          done
+          echo "::error::An update is still running after two hours; not editing state concurrently."
+          exit 1
+
       - name: Download state, master index and deltas
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
