@@ -37,6 +37,8 @@ def main() -> int:
     parser.add_argument("--fragments-dir", default="fragments")
     parser.add_argument("--template", default="downloads/template.html")
     parser.add_argument("--out", default="catalog_out")
+    parser.add_argument("--max-total-bytes", type=int, default=8 * 1024 ** 3,
+                        help="Refuse to publish a catalog larger than this (default 8 GiB)")
     args = parser.parse_args()
 
     meta = load_json(Path(args.plan_dir) / "meta.json", {})
@@ -77,6 +79,11 @@ def main() -> int:
         })
 
     total_size = sum(int(item.get("size_bytes") or 0) for item in fragments)
+    if total_size > args.max_total_bytes:
+        raise SystemExit(
+            f"Catalog is {_human(total_size)}; budget is {_human(args.max_total_bytes)}. "
+            "Remove slices before publishing."
+        )
     payload = {
         "generated_at": meta.get("generated_at"),
         "dataset": meta.get("dataset", "cricket-lake-v3"),

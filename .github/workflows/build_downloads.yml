@@ -8,6 +8,9 @@ name: Build download catalog (R2)
 #
 # The bucket must be public (R2.dev subdomain or custom domain). Open
 # <public-url>/index.html for the catalog.
+#
+# Guardrails: the catalog refuses to publish above 8 GiB (free tier is 10 GB),
+# stale zips are pruned after each catalog deploy, and no egress is charged.
 
 on:
   workflow_dispatch:
@@ -64,6 +67,29 @@ jobs:
           done
           if [ "$missing" -eq 1 ]; then
             echo "Add the four R2 secrets, or run this workflow with dry_run=true."
+            exit 1
+          fi
+
+      - name: Check previous R2 catalog budget
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" = "true" ]; then exit 0; fi
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+          export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+          export AWS_DEFAULT_REGION=auto
+          previous=$(aws s3 cp "s3://${R2_BUCKET}/downloads.json" - \
+            --endpoint-url "$endpoint" 2>/dev/null | jq -r '.total_size_bytes // 0' || echo 0)
+          max=$((8 * 1024 * 1024 * 1024))
+          echo "Previous catalog size: ${previous} bytes (budget ${max})"
+          if [ "${previous:-0}" -gt "$max" ]; then
+            echo "::error::Previous catalog exceeds the 8 GiB budget; prune slices before rebuilding."
             exit 1
           fi
 
@@ -224,6 +250,7 @@ jobs:
             --plan-dir download_plan \
             --fragments-dir fragments \
             --template downloads/template.html \
+            --max-total-bytes 8589934592 \
             --out catalog_out
 
       - name: Upload catalog to R2
@@ -251,6 +278,31 @@ jobs:
               --cache-control "public, max-age=300"
           done
           echo "Catalog uploaded. Open <public-bucket-url>/index.html"
+
+      - name: Prune stale zips from R2
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+          export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+          export AWS_DEFAULT_REGION=auto
+          aws s3api list-objects-v2 --bucket "$R2_BUCKET" --prefix zips/ \
+            --query 'Contents[].Key' --output text 2>/dev/null | tr '\t' '\n' \
+            | grep -v '^None$' | sort > existing_zips.txt || true
+          jq -r '.groups[].subgroups[].slices[].id' catalog_out/downloads.json \
+            | sed 's/$/.zip/' | sort > wanted_zips.txt
+          comm -23 existing_zips.txt wanted_zips.txt | while read -r key; do
+            if [ -n "$key" ]; then
+              echo "pruning $key"
+              aws s3 rm "s3://${R2_BUCKET}/${key}" --endpoint-url "$endpoint"
+            fi
+          done
 
       - uses: actions/upload-artifact@v4
         if: ${{ github.event.inputs.dry_run == 'true' }}
