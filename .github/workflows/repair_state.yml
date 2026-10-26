@@ -1,0 +1,108 @@
+name: Reconcile state and recover stranded matches
+
+# One-off / maintenance workflow. Compares known_ids with the master index and
+# every delta archive, moves known-but-unpublished ids back into the retry
+# queue, then dispatches a 6-hourly update run to re-extract them.
+#
+# Trigger it manually, or push the maintenance branch repair/base once.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dispatch_update:
+        description: 'Dispatch update_lake.yml after reconciling'
+        type: boolean
+        default: true
+  push:
+    branches:
+      - repair/base
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: repair-state
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download state, master index and deltas
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p .state deltas
+          gh release download lake-state --dir .state --clobber
+          gh release download data-unfiltered-master -p 'matches_index.csv' --dir .state --clobber
+          gh release download data-unfiltered-deltas -p 'lake_delta_*.tar.gz' --dir deltas --clobber
+
+      - name: Reconcile known ids
+        id: reconcile
+        run: |
+          set -euo pipefail
+          python scripts/reconcile_state.py \
+            --state-dir .state \
+            --master-index .state/matches_index.csv \
+            --deltas-dir deltas \
+            --summary-out reconcile_summary.json
+          stranded=$(python -c "import json; print(json.load(open('reconcile_summary.json'))['stranded'])")
+          echo "stranded=$stranded" >> "$GITHUB_OUTPUT"
+
+      - name: Upload repaired state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload lake-state .state/known_ids.json .state/lake_state.json --clobber
+
+      - name: Summary
+        run: |
+          {
+            echo "### State reconciliation"
+            echo '```json'
+            cat reconcile_summary.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dispatch update, wait for it, then build the catalog
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.dispatch_update) || github.event_name == 'push' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          before=$(gh run list --workflow=update_lake.yml --event=workflow_dispatch             --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+          gh workflow run update_lake.yml --ref main
+          echo "Dispatched update_lake.yml on main (previous manual run: ${before:-none})."
+
+          run_id=""
+          for _ in $(seq 1 18); do
+            current=$(gh run list --workflow=update_lake.yml --event=workflow_dispatch               --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+            if [ -n "$current" ] && [ "$current" != "$before" ]; then
+              run_id="$current"
+              break
+            fi
+            sleep 10
+          done
+          if [ -z "$run_id" ]; then
+            echo "::error::Could not find the dispatched update run"
+            exit 1
+          fi
+          echo "Watching update run $run_id"
+          gh run watch "$run_id" --interval 30 || \
+            echo "::warning::Update finished with a failure; building from whatever was published"
+          gh workflow run build_downloads.yml --ref main
+          {
+            echo "### Recovery"
+            echo "Update run: $run_id"
+            echo "Dispatched the 20-shard download catalog build."
+          } >> "$GITHUB_STEP_SUMMARY"

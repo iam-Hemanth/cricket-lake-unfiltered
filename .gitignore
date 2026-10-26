@@ -27,3 +27,10 @@ data/matches/
 missing/*.json
 missing/*.csv
 recovered/
+
+# Download catalog build outputs
+download_work/
+download_plan/
+downloads_out/
+catalog_out/
+fragments/

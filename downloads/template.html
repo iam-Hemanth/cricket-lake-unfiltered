@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cricket Lake — Downloads</title>
+<style>
+  :root {
+    --paper: #f3efe4;
+    --paper-2: #ebe5d6;
+    --ink: #16251d;
+    --muted: #5d6b61;
+    --green: #1f4d3a;
+    --green-2: #2f6b52;
+    --orange: #b65f38;
+    --line: rgba(22, 37, 29, .16);
+    --card: rgba(255, 253, 247, .72);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; color: var(--ink); background:
+      radial-gradient(1200px 500px at 95% -10%, rgba(182,95,56,.13), transparent 60%),
+      radial-gradient(900px 500px at -10% 0%, rgba(31,77,58,.10), transparent 55%),
+      var(--paper);
+    font-family: var(--sans);
+    line-height: 1.55;
+  }
+  a { color: var(--green); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:hover { color: var(--orange); }
+  .wrap { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+  header { padding: 64px 0 34px; border-bottom: 1px solid var(--line); }
+  .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--orange); }
+  h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(42px, 7vw, 86px); line-height: .95; letter-spacing: -.03em; margin: 14px 0 16px; }
+  h1 em { font-style: italic; color: var(--green-2); }
+  .lede { max-width: 720px; font-size: 17px; color: var(--muted); margin: 0 0 30px; }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .stat { background: var(--paper); padding: 18px 18px 16px; }
+  .stat .v { font-family: var(--serif); font-size: 26px; line-height: 1.1; }
+  .stat .l { font-family: var(--mono); font-size: 10px; letter-spacing: .13em; text-transform: uppercase; color: var(--muted); margin-top: 7px; }
+  .toolbar { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 26px 0 8px; flex-wrap: wrap; }
+  .search { position: relative; flex: 1 1 320px; max-width: 520px; }
+  .search input { width: 100%; padding: 13px 16px 13px 42px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 15px var(--sans); border-radius: 2px; outline: none; }
+  .search input:focus { border-color: var(--green-2); box-shadow: 0 0 0 3px rgba(47,107,82,.12); }
+  .search svg { position: absolute; left: 14px; top: 14px; opacity: .55; }
+  .toolbar .links { font-family: var(--mono); font-size: 11px; letter-spacing: .04em; color: var(--muted); display: flex; gap: 16px; }
+  .notice { margin: 18px 0 6px; border: 1px solid var(--line); border-left: 3px solid var(--orange); background: rgba(182,95,56,.06); padding: 14px 16px; font-size: 13px; color: var(--muted); }
+  .notice strong { color: var(--ink); font-weight: 600; }
+  main { padding: 10px 0 72px; }
+  .group { margin: 46px 0 0; }
+  .group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+  h2 { font-family: var(--serif); font-weight: 500; font-size: clamp(26px, 4vw, 40px); letter-spacing: -.02em; margin: 0; }
+  .group-desc { color: var(--muted); font-size: 13px; max-width: 560px; text-align: right; }
+  h3 { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 28px 0 12px; }
+  .slices { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .slice { background: var(--card); border: 1px solid var(--line); padding: 18px 18px 15px; display: flex; flex-direction: column; gap: 10px; min-height: 160px; transition: border-color .15s, transform .15s, background .15s; }
+  .slice:hover { border-color: rgba(31,77,58,.45); transform: translateY(-1px); background: rgba(255,253,247,.95); }
+  .slice h4 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.35; letter-spacing: -.01em; }
+  .slice .desc { color: var(--muted); font-size: 12px; margin: 0; }
+  .slice .meta { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; border: 1px solid var(--line); padding: 3px 6px; color: var(--muted); white-space: nowrap; }
+  .dl { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; text-decoration: none; border-bottom: 1px solid var(--green); color: var(--green); padding-bottom: 2px; }
+  .dl:hover { color: var(--orange); border-color: var(--orange); }
+  footer { border-top: 1px solid var(--line); padding: 30px 0 50px; color: var(--muted); font-size: 12px; }
+  footer .cols { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
+  footer code { font-family: var(--mono); font-size: 11px; background: rgba(31,77,58,.07); padding: 1px 4px; }
+  .empty { padding: 50px 0; color: var(--muted); font-family: var(--mono); font-size: 13px; }
+  @media (max-width: 760px) {
+    header { padding-top: 40px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .group-head { display: block; }
+    .group-desc { text-align: left; margin-top: 8px; }
+    footer .cols { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">Cricket Lake · ball-by-ball JSON</div>
+    <h1>The lake, <em>sliced.</em></h1>
+    <p class="lede">Downloads built from the published cricket lake — every match, every ball, plus tactical fields where the source has them. Pick a window, a format, a tournament, or the whole thing.</p>
+    <div class="stats">
+      <div class="stat"><div class="v" id="stat-matches">—</div><div class="l">published matches</div></div>
+      <div class="stat"><div class="v" id="stat-slices">—</div><div class="l">download slices</div></div>
+      <div class="stat"><div class="v" id="stat-size">—</div><div class="l">total archive size</div></div>
+      <div class="stat"><div class="v" id="stat-updated">—</div><div class="l">last built (UTC)</div></div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Filter by team, tournament, format, year…" autocomplete="off" aria-label="Filter downloads">
+    </div>
+    <div class="links">
+      <a href="README.txt">readme</a>
+      <a href="checksums.txt">checksums</a>
+      <a href="downloads.json">downloads.json</a>
+    </div>
+  </div>
+
+  <div class="notice" id="notice"></div>
+  <main id="catalog"><div class="empty">Loading catalog…</div></main>
+
+  <footer>
+    <div class="cols">
+      <div>
+        <p><strong>How to use.</strong> Each zip contains one <code>&lt;match_id&gt;.json</code> per match, a filtered <code>matches_index.csv</code>, a slice <code>lake_manifest.json</code>, and a slice README. Verify against <code>checksums.txt</code>.</p>
+        <p id="coverage"></p>
+      </div>
+      <div>
+        <p><strong>Source.</strong> ESPNcricinfo match pages, assembled by <a href="https://github.com/iam-Hemanth/cricket-lake-unfiltered">cricket-lake-unfiltered</a>. Check the source terms before redistributing.</p>
+        <p><strong>Schema.</strong> <span id="schema"></span></p>
+      </div>
+    </div>
+  </footer>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = new Intl.NumberFormat("en-US");
+function size(bytes) {
+  const units = ["B", "KB", "MB", "GB"];
+  let value = Number(bytes) || 0, i = 0;
+  while (value >= 1024 && i < units.length - 1) { value /= 1024; i++; }
+  return `${i === 0 ? Math.round(value) : value.toFixed(1)} ${units[i]}`;
+}
+function dateLabel(value) {
+  if (!value) return "—";
+  const d = new Date(value);
+  return isNaN(d) ? value.slice(0, 10) : d.toISOString().slice(0, 10);
+}
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function render(data) {
+  $("stat-matches").textContent = fmt.format(data.total_matches || 0);
+  $("stat-slices").textContent = fmt.format(data.slice_count || 0);
+  $("stat-size").textContent = data.total_size_label || "—";
+  $("stat-updated").textContent = dateLabel(data.generated_at);
+  $("schema").textContent = JSON.stringify(data.schema_versions || {});
+  $("notice").innerHTML = "";
+  const notice = $("notice");
+  const womens = data.genders && data.genders.female;
+  notice.append(
+    el("strong", null, "Coverage note. "),
+    el("span", null, `Only clean, published matches are included${data.excluded_quarantined ? ` (${fmt.format(data.excluded_quarantined)} quarantined matches excluded)` : ""}. Added windows cover the incremental/recovery feed since 24 Oct 2026.` + (womens ? " Women's-only downloads are withheld for v1 pending the T2 backfill." : ""))
+  );
+  $("coverage").textContent = `Published lake: ${fmt.format(data.total_matches || 0)} matches; ${fmt.format(data.slice_count || 0)} slices; ${data.total_size_label || ""}. Date range ${data.date_range?.earliest || "—"} to ${data.date_range?.latest || "—"}.`;
+  const root = $("catalog");
+  root.innerHTML = "";
+  const query = ($("q").value || "").trim().toLowerCase();
+  let shown = 0;
+  for (const group of data.groups || []) {
+    const section = el("section", "group");
+    const head = el("div", "group-head");
+    head.append(el("h2", null, group.title), el("div", "group-desc", group.description || ""));
+    section.append(head);
+    let groupShown = 0;
+    for (const sub of group.subgroups || []) {
+      const matches = (sub.slices || []).filter((s) => {
+        const hay = `${group.title} ${sub.title} ${s.title} ${s.description}`.toLowerCase();
+        return !query || hay.includes(query);
+      });
+      if (!matches.length) continue;
+      groupShown += matches.length;
+      section.append(el("h3", null, sub.title));
+      const grid = el("div", "slices");
+      for (const s of matches) {
+        const card = el("article", "slice");
+        card.append(el("h4", null, s.title), el("p", "desc", s.description || ""));
+        const meta = el("div", "meta");
+        const chips = el("div", "chips");
+        chips.append(el("span", "chip", `${fmt.format(s.count || 0)} ${s.count === 1 ? "match" : "matches"}`));
+        chips.append(el("span", "chip", size(s.size_bytes)));
+        meta.append(chips);
+        const link = el("a", "dl", "download ↓");
+        link.href = s.url;
+        link.setAttribute("download", "");
+        meta.append(link);
+        card.append(meta);
+        grid.append(card);
+      }
+      section.append(grid);
+    }
+    if (groupShown) { root.append(section); shown += groupShown; }
+  }
+  if (!shown) root.append(el("div", "empty", "No slices match that filter."));
+}
+let DATA = null;
+fetch("downloads.json", { cache: "no-store" })
+  .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then((data) => { DATA = data; render(data); })
+  .catch((err) => {
+    $("catalog").innerHTML = "";
+    $("catalog").append(el("div", "empty", `Could not load downloads.json (${err.message}). Check that it was uploaded next to index.html.`));
+  });
+$("q").addEventListener("input", () => { if (DATA) render(DATA); });
+</script>
+</body>
+</html>

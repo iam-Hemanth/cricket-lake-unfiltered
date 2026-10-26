@@ -295,7 +295,9 @@ jobs:
           done
           COUNT=$(find merged/raw -name '*.json' ! -name 'failed_matches.json' | wc -l | tr -d ' ')
           echo "delta matches: $COUNT"
-          STAMP=$(date -u +%Y%m%dT%H)
+          # Seconds + run id: an hourly stamp let a later failed run overwrite a
+          # successful delta in the same hour and silently drop its matches.
+          STAMP="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID}"
           echo "STAMP=$STAMP" >> "$GITHUB_ENV"
           echo "COUNT=$COUNT" >> "$GITHUB_ENV"
           if [ "$COUNT" -eq 0 ]; then

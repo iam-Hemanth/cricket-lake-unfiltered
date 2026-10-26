@@ -1,0 +1,84 @@
+{
+  "played_days": [
+    2,
+    7,
+    30,
+    365
+  ],
+  "added_days": [
+    2,
+    7,
+    30,
+    365
+  ],
+  "genders": [
+    {
+      "id": "all",
+      "label": "All matches",
+      "filter": "all"
+    },
+    {
+      "id": "male",
+      "label": "Men",
+      "filter": "male"
+    }
+  ],
+  "levels": [
+    {
+      "id": "all",
+      "label": "All levels",
+      "filter": "all"
+    },
+    {
+      "id": "international",
+      "label": "International",
+      "filter": "international"
+    },
+    {
+      "id": "domestic",
+      "label": "Domestic",
+      "filter": "domestic"
+    }
+  ],
+  "formats": [
+    {
+      "id": "test",
+      "label": "Test",
+      "family": "Test"
+    },
+    {
+      "id": "odi",
+      "label": "ODI",
+      "family": "ODI"
+    },
+    {
+      "id": "t20i",
+      "label": "T20I",
+      "family": "T20I"
+    },
+    {
+      "id": "t20",
+      "label": "T20",
+      "family": "T20"
+    },
+    {
+      "id": "first_class",
+      "label": "First-Class",
+      "family": "First-Class"
+    },
+    {
+      "id": "list_a",
+      "label": "List A",
+      "family": "List A"
+    },
+    {
+      "id": "other",
+      "label": "Other formats",
+      "family": "Other"
+    }
+  ],
+  "competition_limit": 35,
+  "team_limit": 40,
+  "country_limit": 12,
+  "shards": 20
+}

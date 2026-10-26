@@ -1,0 +1,269 @@
+name: Build download catalog (R2)
+
+# Builds the Cricsheet-style download slices from the published master plus
+# every delta, then publishes the zips and catalog to an S3-compatible bucket.
+#
+# Required repository secrets:
+#   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
+#
+# The bucket must be public (R2.dev subdomain or custom domain). Open
+# <public-url>/index.html for the catalog.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and upload catalog artifacts without touching R2'
+        type: boolean
+        default: false
+  schedule:
+    # After the nightly consolidate (02:30 UTC) with a buffer for delays.
+    - cron: '30 4 * * *'
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: build-downloads
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check R2 configuration
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run: R2 upload will be skipped."
+            exit 0
+          fi
+          missing=0
+          for name in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing repository secret: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "Add the four R2 secrets, or run this workflow with dry_run=true."
+            exit 1
+          fi
+
+      - name: Download master, deltas and release metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/deltas
+          gh release download data-unfiltered-master \
+            -p 'cricket_lake_unfiltered_master.tar.gz' \
+            -p 'matches_index.csv' \
+            -p 'lake_manifest.json' \
+            --dir artifacts --clobber
+          gh release download data-unfiltered-deltas \
+            -p 'lake_delta_*.tar.gz' \
+            --dir artifacts/deltas --clobber
+          gh release view data-unfiltered-deltas --json assets > artifacts/delta_assets.json
+          gh release view data-unfiltered-batches --json assets > artifacts/batches_assets.json
+
+      - name: Normalize metadata and plan slices
+        run: |
+          set -euo pipefail
+          python -m scripts.downloads.prepare \
+            --master-tar artifacts/cricket_lake_unfiltered_master.tar.gz \
+            --master-index artifacts/matches_index.csv \
+            --master-manifest artifacts/lake_manifest.json \
+            --deltas-dir artifacts/deltas \
+            --delta-assets artifacts/delta_assets.json \
+            --batches-assets artifacts/batches_assets.json \
+            --config-dir downloads/config \
+            --workdir download_work \
+            --out download_plan
+
+      - name: Upload plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: download-plan
+          path: download_plan
+          retention-days: 7
+
+      - name: Summary
+        run: |
+          {
+            echo "### Download plan"
+            echo '```json'
+            cat download_plan/meta.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: download-plan
+          path: download_plan
+
+      - name: Download master and deltas
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/deltas
+          gh release download data-unfiltered-master \
+            -p 'cricket_lake_unfiltered_master.tar.gz' \
+            --dir artifacts --clobber
+          gh release download data-unfiltered-deltas \
+            -p 'lake_delta_*.tar.gz' \
+            --dir artifacts/deltas --clobber
+
+      - name: Build shard ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          python -m scripts.downloads.build_shard \
+            --plan-dir download_plan \
+            --shard ${{ matrix.shard }} \
+            --master-tar artifacts/cricket_lake_unfiltered_master.tar.gz \
+            --deltas-dir artifacts/deltas \
+            --workdir download_work \
+            --out downloads_out
+
+      - name: Upload zips to R2
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+          export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+          export AWS_DEFAULT_REGION=auto
+          shopt -s nullglob
+          zips=(downloads_out/zips/*.zip)
+          if [ "${#zips[@]}" -eq 0 ]; then
+            echo "No zips in shard ${{ matrix.shard }}."
+            exit 0
+          fi
+          aws s3 cp downloads_out/zips/ "s3://${R2_BUCKET}/zips/" \
+            --recursive \
+            --endpoint-url "$endpoint" \
+            --content-type application/zip \
+            --cache-control "public, max-age=31536000, immutable"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fragment-${{ matrix.shard }}
+          path: downloads_out/fragment_${{ matrix.shard }}.json
+          retention-days: 7
+
+  catalog:
+    needs: [preflight, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: download-plan
+          path: download_plan
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fragment-*
+          merge-multiple: true
+          path: fragments
+
+      - name: Build catalog
+        run: |
+          set -euo pipefail
+          python -m scripts.downloads.catalog \
+            --plan-dir download_plan \
+            --fragments-dir fragments \
+            --template downloads/template.html \
+            --out catalog_out
+
+      - name: Upload catalog to R2
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+          export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+          export AWS_DEFAULT_REGION=auto
+          for file in downloads.json index.html README.txt checksums.txt; do
+            case "$file" in
+              *.html) type="text/html; charset=utf-8" ;;
+              *.json) type="application/json; charset=utf-8" ;;
+              *) type="text/plain; charset=utf-8" ;;
+            esac
+            aws s3 cp "catalog_out/$file" "s3://${R2_BUCKET}/$file" \
+              --endpoint-url "$endpoint" \
+              --content-type "$type" \
+              --cache-control "public, max-age=300"
+          done
+          echo "Catalog uploaded. Open <public-bucket-url>/index.html"
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        with:
+          name: catalog-dry-run
+          path: catalog_out
+          retention-days: 7
+
+      - name: Summary
+        run: |
+          {
+            echo "### Download catalog"
+            echo '```json'
+            cat catalog_out/downloads.json | head -c 4000
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

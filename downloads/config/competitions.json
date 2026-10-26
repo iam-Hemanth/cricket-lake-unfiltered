@@ -1,0 +1,402 @@
+[
+  {
+    "id": "ipl",
+    "name": "Indian Premier League",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "Indian Premier League",
+      "IPL",
+      "Pepsi Indian Premier League",
+      "Dream11 Indian Premier League",
+      "Vivo IPL"
+    ],
+    "patterns": [
+      "^(Pepsi |Dream11 |Vivo )?IPL$"
+    ]
+  },
+  {
+    "id": "bbl",
+    "name": "Big Bash League",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "Big Bash League",
+      "BBL"
+    ]
+  },
+  {
+    "id": "cpl",
+    "name": "Caribbean Premier League",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "Caribbean Premier League",
+      "CPL"
+    ]
+  },
+  {
+    "id": "bpl",
+    "name": "Bangladesh Premier League",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "Bangladesh Premier League",
+      "BPL",
+      "BPL 2016",
+      "BPL 2017",
+      "BPL 2019",
+      "BPL 2020",
+      "BPL 2022",
+      "BPL 2023",
+      "BPL 2024",
+      "BPL 2025"
+    ],
+    "patterns": [
+      "^BPL( \\\\d{4})?$",
+      "^Bangladesh Premier League.*$"
+    ]
+  },
+  {
+    "id": "psl",
+    "name": "Pakistan Super League",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "Pakistan Super League",
+      "PSL",
+      "HBL PSL"
+    ]
+  },
+  {
+    "id": "vitality_blast",
+    "name": "Vitality Blast",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "Vitality Blast",
+      "Vitality Blast Men",
+      "NatWest t20 Blast",
+      "T20 Blast",
+      "Friends Life t20"
+    ],
+    "patterns": [
+      "^(Vitality Blast|NatWest t20 Blast|T20 Blast|Friends Life t20).*$"
+    ]
+  },
+  {
+    "id": "the_hundred",
+    "name": "The Hundred",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "The Hundred Men's Competition",
+      "The Hundred Women's Competition",
+      "The Hundred"
+    ],
+    "patterns": [
+      "^The Hundred( Men\\'s Competition)?$"
+    ]
+  },
+  {
+    "id": "sa20",
+    "name": "SA20",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "SA20",
+      "SA 20"
+    ]
+  },
+  {
+    "id": "ilt20",
+    "name": "International League T20",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "International League T20",
+      "ILT20"
+    ]
+  },
+  {
+    "id": "mlc",
+    "name": "Major League Cricket",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "Major League Cricket",
+      "MLC"
+    ]
+  },
+  {
+    "id": "super_smash",
+    "name": "Super Smash",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "Super Smash",
+      "HRV Cup"
+    ]
+  },
+  {
+    "id": "lpl",
+    "name": "Lanka Premier League",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "Lanka Premier League",
+      "LPL"
+    ]
+  },
+  {
+    "id": "nepal_premier_league",
+    "name": "Nepal Premier League",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "Nepal Premier League",
+      "NPL"
+    ]
+  },
+  {
+    "id": "csa_t20",
+    "name": "CSA T20 Challenge",
+    "type": "club",
+    "browse": true,
+    "aliases": [
+      "CSA T20 Challenge",
+      "CSA Pro20 Cup"
+    ]
+  },
+  {
+    "id": "ram_slam",
+    "name": "Ram Slam T20 Challenge",
+    "type": "club",
+    "browse": false,
+    "aliases": [
+      "Ram Slam T20 Challenge"
+    ]
+  },
+  {
+    "id": "mzansi",
+    "name": "Mzansi Super League",
+    "type": "club",
+    "browse": false,
+    "aliases": [
+      "Mzansi Super League"
+    ]
+  },
+  {
+    "id": "county_championship",
+    "name": "County Championship",
+    "type": "domestic",
+    "browse": true,
+    "aliases": [
+      "County Championship",
+      "County Championship Division One",
+      "County Championship Division Two",
+      "County DIV One",
+      "County DIV Two",
+      "County Div 1",
+      "County Div 2",
+      "LV= County Championship Division One",
+      "LV= County Championship Division Two",
+      "Specsavers County Championship Division One",
+      "Specsavers County Championship Division Two"
+    ],
+    "patterns": [
+      "^(LV=|Specsavers )?County Championship.*$",
+      "^County (DIV|Div).*$"
+    ]
+  },
+  {
+    "id": "one_day_cup_eng",
+    "name": "One-Day Cup (England)",
+    "type": "domestic",
+    "browse": true,
+    "aliases": [
+      "Royal London One-Day Cup",
+      "One-Day Cup"
+    ],
+    "patterns": [
+      "^Royal London One-Day Cup$",
+      "^One-Day Cup$"
+    ]
+  },
+  {
+    "id": "sheffield_shield",
+    "name": "Sheffield Shield",
+    "type": "domestic",
+    "browse": true,
+    "aliases": [
+      "Sheffield Shield"
+    ]
+  },
+  {
+    "id": "plunket_shield",
+    "name": "Plunket Shield",
+    "type": "domestic",
+    "browse": true,
+    "aliases": [
+      "Plunket Shield"
+    ]
+  },
+  {
+    "id": "smat",
+    "name": "Syed Mushtaq Ali Trophy",
+    "type": "domestic",
+    "browse": true,
+    "aliases": [
+      "Syed Mushtaq Ali Trophy"
+    ]
+  },
+  {
+    "id": "marsh_cup",
+    "name": "The Marsh Cup",
+    "type": "domestic",
+    "browse": true,
+    "aliases": [
+      "The Marsh Cup",
+      "One-Day Cup (AUS)"
+    ]
+  },
+  {
+    "id": "major_clubs_limited",
+    "name": "Major Clubs Limited Over Tournament",
+    "type": "domestic",
+    "browse": true,
+    "aliases": [
+      "Major Clubs Limited Over Tournament"
+    ]
+  },
+  {
+    "id": "major_clubs_t20",
+    "name": "Major Clubs T20 Tournament",
+    "type": "domestic",
+    "browse": true,
+    "aliases": [
+      "Major Clubs T20 Tournament"
+    ]
+  },
+  {
+    "id": "major_league_tournament",
+    "name": "Major League Tournament",
+    "type": "domestic",
+    "browse": true,
+    "aliases": [
+      "Major League Tournament"
+    ]
+  },
+  {
+    "id": "icc_cricket_world_cup",
+    "name": "ICC Cricket World Cup",
+    "type": "international_event",
+    "browse": true,
+    "aliases": [
+      "ICC Cricket World Cup",
+      "ICC World Cup",
+      "Cricket World Cup"
+    ],
+    "patterns": [
+      "^ICC (Men\\'s )?Cricket World Cup$",
+      "^ICC World Cup$"
+    ]
+  },
+  {
+    "id": "icc_t20_world_cup",
+    "name": "ICC Men's T20 World Cup",
+    "type": "international_event",
+    "browse": true,
+    "aliases": [
+      "ICC Men's T20 World Cup",
+      "ICC World Twenty20",
+      "World T20",
+      "T20 World Cup"
+    ],
+    "patterns": [
+      "^ICC (Men\\'s )?T20 World Cup$",
+      "^ICC World Twenty20$",
+      "^World T20$"
+    ]
+  },
+  {
+    "id": "icc_champions_trophy",
+    "name": "ICC Champions Trophy",
+    "type": "international_event",
+    "browse": true,
+    "aliases": [
+      "ICC Champions Trophy",
+      "Champions Trophy"
+    ],
+    "patterns": [
+      "^ICC Champions Trophy$",
+      "^Champions Trophy$"
+    ]
+  },
+  {
+    "id": "asia_cup",
+    "name": "Asia Cup",
+    "type": "international_event",
+    "browse": true,
+    "aliases": [
+      "Asia Cup"
+    ],
+    "patterns": [
+      "^Asia Cup$"
+    ]
+  },
+  {
+    "id": "world_cup_league_2",
+    "name": "ICC Cricket World Cup League 2",
+    "type": "international_event",
+    "browse": true,
+    "aliases": [
+      "ICC Men's Cricket World Cup League 2",
+      "World Cup League 2"
+    ],
+    "patterns": [
+      "League 2$"
+    ]
+  },
+  {
+    "id": "t20_wc_qualifier",
+    "name": "T20 World Cup Qualifier",
+    "type": "international_event",
+    "browse": true,
+    "aliases": [
+      "ICC World Twenty20 Qualifier",
+      "Men's T20 WC Qualifier",
+      "ICC Men's T20 World Cup Qualifier",
+      "T20 World Cup Qualifier"
+    ],
+    "patterns": [
+      "Qualifier$"
+    ]
+  },
+  {
+    "id": "cwc_challenge",
+    "name": "CWC Challenge League",
+    "type": "international_event",
+    "browse": true,
+    "aliases": [
+      "CWC Challenge League A",
+      "CWC Challenge League B",
+      "CWC Challenge League Group A",
+      "CWC Challenge League Group B",
+      "ICC Cricket World Cup Challenge League"
+    ],
+    "patterns": [
+      "^CWC Challenge League.*$"
+    ]
+  },
+  {
+    "id": "africa_continental_cup",
+    "name": "Africa Continental Cup",
+    "type": "international_event",
+    "browse": false,
+    "aliases": [
+      "Africa Continental Cup",
+      "Continental Cup"
+    ]
+  }
+]
