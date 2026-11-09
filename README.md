@@ -34,3 +34,14 @@ This dataset expands beyond core international and franchise competitions to enc
 
 - **`parallel_extract_unfiltered.yml`**: Parallel matrix extractor running 52 batches (250 matches each) with 20 concurrent runners on GitHub Actions.
 - **`consolidate_full_lake.yml`**: Master aggregator merging all 52 delta batches with the 5,483 curated matches from `cricket-extractor`.
+- **`build_downloads.yml`**: Builds the Cricsheet-style slice catalog and publishes the zips to the rolling `download-slices` release plus the catalog page on GitHub Pages.
+
+## Downloads
+
+The slice catalog is published at
+[cricket-lake-unfiltered](https://iam-hemanth.github.io/cricket-lake-unfiltered/).
+Each slice is a zip containing match JSON, a filtered `matches_index.csv`, a
+slice `lake_manifest.json`, and a slice README. Zips are assets on the rolling
+`download-slices` release; verify them against `checksums.txt`. The catalog is
+rebuilt nightly after the consolidate job, and no third-party storage account
+or credentials are involved.
