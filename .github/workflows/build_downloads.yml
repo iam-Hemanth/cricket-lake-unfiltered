@@ -237,7 +237,17 @@ jobs:
               exit 1
             fi
           done
-          gh release upload "$SLICE_TAG" "${zips[@]}" --clobber
+          for attempt in $(seq 1 20); do
+            if gh release upload "$SLICE_TAG" "${zips[@]}" --clobber; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              echo "::error::upload failed after 20 attempts"
+              exit 1
+            fi
+            echo "upload hit a rate limit; retrying in 60s (attempt ${attempt}/20)"
+            sleep 60
+          done
 
       - uses: actions/upload-artifact@v4
         with:
