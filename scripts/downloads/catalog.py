@@ -135,7 +135,8 @@ IMPORTANT
     matches are excluded from the public lake.
   * Added windows cover the incremental/recovery feed; the original 16.4k
     backfill predates it and is available through Played/All/Year slices.
-  * Women's-only downloads are withheld for v1 until the T2 backfill is run.
+  * All-match slices include the small women's set. Women's-only slices are
+    withheld for v1 until the T2 backfill is run.
   * Verify downloads against checksums.txt.
 
 Source: ESPNcricinfo match pages via cricket-lake-unfiltered.

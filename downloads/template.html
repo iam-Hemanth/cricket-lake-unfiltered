@@ -835,11 +835,11 @@ function render(data) {
   $("schema").textContent = JSON.stringify(data.schema_versions || {});
 
   const quarantined = data.excluded_quarantined;
-  const womens = data.genders && data.genders.female;
+  const female = (data.genders && data.genders.female) || 0;
   $("mon-note").textContent =
     `Only clean, published matches are included${quarantined ? ` (${fmt.format(quarantined)} quarantined excluded)` : ""}. ` +
     "Added windows cover the incremental/recovery feed since 24 Oct 2026." +
-    (womens ? " Women's-only downloads are withheld for v1 pending the T2 backfill." : "");
+    (female ? ` All-match slices include ${fmt.format(female)} women's matches; women's-only slices are withheld for v1 pending the T2 backfill.` : "");
   $("coverage").textContent =
     `Published lake: ${fmt.format(data.total_matches || 0)} matches; ${fmt.format(data.slice_count || 0)} slices; ${data.total_size_label || ""}. ` +
     `Date range ${range.earliest || "—"} to ${range.latest || "—"}.`;

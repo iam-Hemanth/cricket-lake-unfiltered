@@ -118,7 +118,7 @@ def main() -> int:
         "notes": [
             "Only clean, published matches are included. Quarantined matches remain excluded.",
             "Men-only slices are listed separately; all-match slices include the small women's set.",
-            "Women's-only downloads are withheld for v1 until the T2 backfill is run.",
+            "All-match slices include the small women's set; women's-only slices are withheld for v1 until the T2 backfill is run.",
             "Added windows cover matches first published by the delta/recovery pipeline; the original 16.4k backfill predates this feed.",
             "Played windows use the first date in meta.dates; multi-day matches are counted from their start date.",
         ],

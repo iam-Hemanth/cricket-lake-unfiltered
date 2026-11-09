@@ -24,6 +24,7 @@ Filters       : {filters}
 Matches       : {count}
 Date range    : {earliest} to {latest}
 Schema mix    : {schemas}
+Gender mix    : {genders}
 Generated at  : {generated_at}
 
 CONTENTS
@@ -49,7 +50,8 @@ NOTES
     multi-day matches). Added windows use the date a match entered the lake.
   * The original 16.4k backfill predates the incremental feed, so older matches
     do not appear in the "added" windows.
-  * Women's-only downloads are withheld for v1 until the T2 backfill is run.
+  * All-match slices include the small women's set. Women's-only slices are
+    withheld for v1 until the T2 backfill is run.
   * Source: ESPNcricinfo match pages via cricket-lake-unfiltered.
 
 Verify this archive with the sha256 in the catalog's checksums.txt.
@@ -227,6 +229,7 @@ def main() -> int:
             earliest=(manifest["date_range"]["earliest"] or "unknown"),
             latest=(manifest["date_range"]["latest"] or "unknown"),
             schemas=json.dumps(manifest["schema_versions"], sort_keys=True),
+            genders=json.dumps(manifest["genders"], sort_keys=True),
             generated_at=generated_at,
             match_note=match_note,
             match_table=match_table,
