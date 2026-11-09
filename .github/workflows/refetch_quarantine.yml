@@ -1,0 +1,180 @@
+name: Re-fetch quarantined matches
+
+# Re-downloads the still-quarantined matches from the source and re-runs the
+# production extractor. This distinguishes two very different cases:
+#   * the original parse was truncated / drifted  -> the new file validates
+#   * the source itself is incomplete             -> the new file still fails
+# Only files that pass the current validator are published as a new
+# matches_batch_refetch_*.tar.gz asset on data-unfiltered-batches.
+#
+# The source batch is never edited: matches that still fail stay quarantined
+# in matches_batch_recovery_*.tar.gz, and the failure list is uploaded as a
+# workflow artifact for the next repair pass.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_asset:
+        description: 'Batch asset containing the quarantined matches'
+        required: true
+        default: 'matches_batch_recovery_20261025.tar.gz'
+      publish:
+        description: 'Upload the passing refetch batch to data-unfiltered-batches'
+        type: boolean
+        default: true
+      delay:
+        description: 'Base delay between source requests (seconds)'
+        required: true
+        default: '0.15'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refetch-quarantine
+  cancel-in-progress: false
+
+env:
+  BATCH_TAG: data-unfiltered-batches
+
+jobs:
+  refetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download source batch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p recovered/matches
+          gh release download "$BATCH_TAG" \
+            -p "${{ github.event.inputs.source_asset }}" \
+            --dir recovered --clobber
+          tar -xzf "recovered/${{ github.event.inputs.source_asset }}" -C recovered/matches
+          echo "source files: $(find recovered/matches -name '*.json' | wc -l)"
+
+      - name: List quarantined ids
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, pathlib
+          ids = []
+          for p in sorted(pathlib.Path('recovered/matches').glob('*.json')):
+              try:
+                  data = json.loads(p.read_text())
+              except Exception:
+                  continue
+              if (data.get('meta') or {}).get('validation_status') == 'failed':
+                  ids.append(p.stem)
+          pathlib.Path('quarantine_ids.txt').write_text('\n'.join(ids) + ('\n' if ids else ''))
+          print(f'quarantined ids: {len(ids)}')
+          if not ids:
+              raise SystemExit('no quarantined matches in this batch')
+          PY
+
+      - name: Re-fetch and re-extract from source
+        env:
+          AKAMAI_KEY: ${{ secrets.AKAMAI_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p refetched raw
+          python extract.py \
+            --ids-file quarantine_ids.txt \
+            --output-dir refetched \
+            --raw-dir raw \
+            --delay "${{ github.event.inputs.delay }}" \
+            --allow-validation-failures
+
+      - name: Split passing and still-failing files
+        run: |
+          set -euo pipefail
+          mkdir -p pass fail
+          python - <<'PY'
+          import json, pathlib, shutil, collections
+          passed = 0
+          failed = 0
+          reasons = collections.Counter()
+          for p in sorted(pathlib.Path('refetched').glob('*.json')):
+              if p.name == 'failed_matches.json':
+                  continue
+              try:
+                  data = json.loads(p.read_text())
+              except Exception as exc:
+                  reasons['unreadable'] += 1
+                  shutil.copy2(p, pathlib.Path('fail') / p.name)
+                  failed += 1
+                  continue
+              if (data.get('meta') or {}).get('validation_status') == 'failed':
+                  errs = (data.get('meta') or {}).get('validation_errors') or []
+                  for e in errs[:1]:
+                      key = e.split(':')[0].split(' at ')[0]
+                      if key.startswith('Inn '):
+                          key = 'over-length'
+                      reasons[key] += 1
+                  shutil.copy2(p, pathlib.Path('fail') / p.name)
+                  failed += 1
+              else:
+                  shutil.copy2(p, pathlib.Path('pass') / p.name)
+                  passed += 1
+          missing = 0
+          summary = {'passed': passed, 'failed': failed, 'missing': missing,
+                     'first_error_kinds': dict(reasons.most_common(15))}
+          pathlib.Path('refetch_summary.json').write_text(json.dumps(summary, indent=2))
+          print(json.dumps(summary, indent=2))
+          if passed < 1:
+              raise SystemExit('refetch produced no passing matches')
+          PY
+
+      - name: Package passing batch
+        id: package
+        run: |
+          set -euo pipefail
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID}"
+          asset="matches_batch_refetch_${stamp}.tar.gz"
+          tar -czf "$asset" -C pass .
+          sha256sum "$asset" | tee "${asset}.sha256"
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+
+      - name: Upload passing batch
+        if: ${{ github.event.inputs.publish == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "$BATCH_TAG" "${{ steps.package.outputs.asset }}" --clobber
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: refetch-results
+          path: |
+            refetch_summary.json
+            quarantine_ids.txt
+            matches_batch_refetch_*.tar.gz
+            matches_batch_refetch_*.tar.gz.sha256
+            fail/
+            refetched/failed_matches.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Quarantine re-fetch"
+            echo '```json'
+            cat refetch_summary.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo "Passing asset: \`${{ steps.package.outputs.asset }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
