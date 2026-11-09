@@ -108,6 +108,9 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     (out / "downloads.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     shutil.copyfile(args.template, out / "index.html")
+    calendar_template = Path(args.template).resolve().parent / "calendar.html"
+    if calendar_template.exists():
+        shutil.copyfile(calendar_template, out / "calendar.html")
     fonts_src = Path(args.template).resolve().parent / "fonts"
     if fonts_src.is_dir():
         shutil.copytree(fonts_src, out / "fonts", dirs_exist_ok=True)
@@ -131,6 +134,9 @@ Open index.html for the catalog. Each zip contains:
   matches_index.csv  filtered index for the slice
   lake_manifest.json slice counts, filters and coverage
   README.txt         slice-specific notes
+
+Open calendar.html for the dated view. Each published match has a single
+gzipped JSON under m/ (<match_id>.json.gz) that the page decompresses on save.
 
 IMPORTANT
   * Only clean, published matches are included. {payload['excluded_quarantined'] or 0:,} quarantined

@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="en" data-mode="paper">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cricket Lake — Calendar</title>
+<meta name="description" content="Browse every published match by date and download a single match JSON from the Cricket Lake.">
+<link rel="preload" href="fonts/instrument-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/crimson-600.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  @font-face { font-family: "Instrument Sans"; src: url("fonts/instrument-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+  @font-face { font-family: "Instrument Sans"; src: url("fonts/instrument-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+  @font-face { font-family: "Crimson Pro"; src: url("fonts/crimson-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+  @font-face { font-family: "Crimson Pro"; src: url("fonts/crimson-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+
+  :root {
+    --paper: #f4f0e6; --paper-2: #ebe6d8; --card: #fbf9f2; --card-2: #f7f3e9;
+    --ink: #1b2b2a; --ink-2: #465c5a; --ink-3: #5b6b69;
+    --line: rgba(27, 43, 42, .15); --line-soft: rgba(27, 43, 42, .08); --line-strong: rgba(27, 43, 42, .3);
+    --forest: #1c403f; --forest-soft: #1b4a49; --moss: #3b6664; --green: #356f67;
+    --green-wash: #dfeae6; --green-wash-2: #eaf1ee;
+    --test: #8a4b3f; --odi: #3d5f86; --t20i: #6b5a94; --t20: #3b6b57; --fc: #7a5c3e; --lista: #4f7370; --other: #77776f;
+    --grain-opacity: .22;
+    --shadow-soft: 0 18px 50px -30px rgba(16, 38, 34, .28);
+    --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --serif: "Crimson Pro", Georgia, "Times New Roman", serif;
+    --mono: "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --shell: 1420px; --r-sm: 8px; --r-lg: 18px; --r-pill: 999px;
+    color-scheme: light;
+  }
+  html[data-mode="dusk"] {
+    --paper: #0d1516; --paper-2: #121c1d; --card: #162223; --card-2: #1a2728;
+    --ink: #edf1ea; --ink-2: #bcc9c3; --ink-3: #90a39c;
+    --line: rgba(238, 240, 231, .16); --line-soft: rgba(238, 240, 231, .08); --line-strong: rgba(238, 240, 231, .32);
+    --forest: #d3e9df; --forest-soft: #173234; --moss: #a6cbc1; --green: #8ed1c4;
+    --green-wash: #182a28; --green-wash-2: #172522;
+    --test: #d79b8d; --odi: #9bb9dd; --t20i: #c0aee6; --t20: #9bcbb4; --fc: #d3b591; --lista: #9dc7c3; --other: #b3b3a8;
+    --grain-opacity: .14;
+    --shadow-soft: 0 18px 50px -30px rgba(0, 0, 0, .7);
+    color-scheme: dark;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 400 16px/1.62 var(--sans);
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    transition: background-color .35s ease, color .35s ease;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: 1000; pointer-events: none;
+    opacity: var(--grain-opacity); mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.32'/%3E%3C/svg%3E");
+  }
+  html[data-mode="dusk"] body::after { mix-blend-mode: soft-light; }
+  ::selection { background: var(--green-wash); color: var(--ink); }
+  a { color: inherit; text-decoration: none; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  p, h1, h2, h3 { margin: 0; }
+  svg { display: block; flex: none; }
+  :focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+  .wrap { width: min(calc(100% - 80px), var(--shell)); margin-inline: auto; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .skip { position: fixed; top: 10px; left: 10px; z-index: 200; transform: translateY(-160%); padding: 10px 16px; border-radius: var(--r-sm); background: var(--ink); color: var(--paper); font-size: 12px; transition: transform .2s ease; }
+  .skip:focus { transform: none; }
+
+  .site-head { position: sticky; top: 0; z-index: 60; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--paper) 90%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.1); backdrop-filter: blur(16px) saturate(1.1); }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 18px; height: 62px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+  .brand .mark { width: 24px; height: 24px; color: var(--forest); }
+  .brand-name { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+  .brand-name b { font-size: 13.5px; font-weight: 500; letter-spacing: -.01em; }
+  .brand-name span { font-family: var(--mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+  .head-tools { display: flex; align-items: center; gap: 14px; }
+  .top-nav { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--card); }
+  .top-nav a { padding: 3px 11px; border-radius: var(--r-pill); font-family: var(--mono); font-size: 9px; letter-spacing: .04em; color: var(--ink-3); }
+  .top-nav a[aria-current="page"] { background: var(--ink); color: var(--paper); }
+  .segmented { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--card); }
+  .segmented button { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border: 0; border-radius: var(--r-pill); background: transparent; font-family: var(--mono); font-size: 9px; letter-spacing: .04em; color: var(--ink-3); transition: background-color .18s ease, color .18s ease; }
+  .segmented button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .segmented svg { width: 11px; height: 11px; }
+
+  .hero { padding: 46px 0 28px; }
+  .eyebrow { display: flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--moss); }
+  .eyebrow::before { content: ""; width: 22px; height: 1px; background: currentColor; opacity: .6; }
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(300px, .72fr); gap: clamp(28px, 4vw, 64px); align-items: end; margin-top: 14px; }
+  h1 { font-family: var(--serif); font-size: clamp(38px, 5.2vw, 58px); font-weight: 600; line-height: 1; letter-spacing: -.03em; }
+  h1 em { font-style: italic; font-weight: 400; color: var(--moss); }
+  .lede { color: var(--ink-2); font-size: 15.5px; max-width: 58ch; }
+  .hero-side { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+  .meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 13px; margin-top: 22px; font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+  .meta-line b { font-weight: 400; color: var(--ink-2); }
+  .meta-line .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--green); opacity: .7; }
+
+  .workbench { display: grid; grid-template-columns: 208px minmax(0, 1fr) 292px; gap: 26px; align-items: start; padding-top: 4px; }
+  .rail { position: sticky; top: 84px; padding-top: 6px; max-height: calc(100vh - 100px); overflow: auto; scrollbar-width: thin; }
+  .rail-label, .mon-head, .era-label { font-family: var(--mono); font-size: 8px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+  .rail-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .rail-count { font-family: var(--mono); font-size: 9px; color: var(--ink-3); }
+  .reset { border: 0; background: none; padding: 0; font-family: var(--mono); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: var(--moss); }
+  .reset:hover { color: var(--green); }
+  .era-label { margin: 16px 0 6px; }
+  .year-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .year-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 8px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); background: var(--card); text-align: left; transition: border-color .15s ease, background-color .15s ease; }
+  .year-btn b { font-size: 12px; font-weight: 500; line-height: 1.2; }
+  .year-btn span { font-family: var(--mono); font-size: 8px; color: var(--ink-3); line-height: 1.2; }
+  .year-btn:hover { border-color: var(--line-strong); }
+  .year-btn[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  .year-btn[aria-pressed="true"] span { color: color-mix(in srgb, var(--paper) 70%, transparent); }
+  .all-time { width: 100%; justify-content: center; align-items: center; margin-bottom: 2px; }
+
+  .filter-block { border-top: 1px solid var(--line-soft); margin-top: 16px; padding-top: 12px; }
+  .filter-block h2 { font-family: var(--mono); font-size: 8px; font-weight: 400; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--card); font-family: var(--mono); font-size: 9px; letter-spacing: .02em; color: var(--ink-2); }
+  .chip .n { font-size: 8px; color: var(--ink-3); }
+  .chip[aria-pressed="true"] { background: var(--green-wash); border-color: color-mix(in srgb, var(--green) 40%, transparent); color: var(--forest); }
+  select.field { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--card); font-size: 11.5px; }
+
+  .desk { min-width: 0; }
+  .month-bar { display: flex; align-items: center; gap: 12px; padding: 4px 0 14px; }
+  .nav-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; background: var(--card); color: var(--ink-2); }
+  .nav-btn:hover { border-color: var(--line-strong); color: var(--ink); }
+  .month-title { font-family: var(--serif); font-size: 26px; font-weight: 600; letter-spacing: -.02em; line-height: 1; }
+  .month-count { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-left: 4px; }
+  .today { margin-left: auto; }
+  .month-strip { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; margin-bottom: 12px; }
+  .mcell { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 2px; border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; }
+  .mcell b { font-size: 11px; font-weight: 500; line-height: 1; }
+  .mcell span { font-family: var(--mono); font-size: 8px; color: var(--ink-3); line-height: 1; }
+  .mcell:hover { background: var(--card); }
+  .mcell[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .mcell[aria-pressed="true"] span { color: color-mix(in srgb, var(--paper) 70%, transparent); }
+
+  .week-head { display: grid; grid-template-columns: repeat(7, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .week-head span { padding: 7px 8px; font-family: var(--mono); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+  .grid { display: grid; grid-template-columns: repeat(7, 1fr); border-left: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+  .day { position: relative; min-height: 96px; padding: 6px; border-right: 1px solid var(--line-soft); border-top: 1px solid var(--line-soft); background: var(--card); text-align: left; display: flex; flex-direction: column; gap: 3px; transition: background-color .15s ease; }
+  .day:hover { background: var(--card-2); }
+  .day.out { background: color-mix(in srgb, var(--paper) 55%, transparent); opacity: .55; }
+  .day.selected { outline: 2px solid var(--green); outline-offset: -2px; background: var(--green-wash-2); }
+  .day.today .day-num { background: var(--ink); color: var(--paper); }
+  .day-num { align-self: flex-start; min-width: 19px; height: 19px; padding: 0 4px; border-radius: 5px; font-family: var(--mono); font-size: 10px; line-height: 19px; text-align: center; color: var(--ink-2); }
+  .mchip { display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 4px; background: var(--green-wash); font-size: 9.5px; line-height: 1.3; color: var(--forest); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mchip i { width: 5px; height: 5px; border-radius: 50%; flex: none; }
+  .mchip.gap { background: color-mix(in srgb, var(--test) 12%, transparent); color: var(--ink); }
+  .more { font-family: var(--mono); font-size: 8px; color: var(--ink-3); padding-left: 3px; }
+
+  .day-head { display: flex; align-items: baseline; gap: 10px; margin: 26px 0 12px; }
+  .day-head h2 { font-family: var(--serif); font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
+  .day-head span { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+  .empty { padding: 26px; border: 1px dashed var(--line); border-radius: var(--r-lg); color: var(--ink-3); font-size: 13px; }
+
+  .match-card { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--card); padding: 14px 16px; margin-bottom: 10px; box-shadow: var(--shadow-soft); }
+  .mc-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ftag { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: var(--r-pill); background: var(--paper-2); font-family: var(--mono); font-size: 8px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+  .ftag i { width: 6px; height: 6px; border-radius: 50%; }
+  .comp { font-size: 12px; color: var(--ink-2); }
+  .badge { margin-left: auto; padding: 2px 8px; border-radius: var(--r-pill); font-family: var(--mono); font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+  .badge.warning { background: color-mix(in srgb, var(--odi) 14%, transparent); color: var(--odi); }
+  .badge.source_gap { background: color-mix(in srgb, var(--test) 14%, transparent); color: var(--test); }
+  .badge.clean { background: var(--green-wash); color: var(--green); }
+  .mc-teams { font-family: var(--serif); font-size: 22px; font-weight: 600; line-height: 1.15; margin-top: 6px; letter-spacing: -.01em; }
+  .mc-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 12px; color: var(--ink-2); }
+  .mc-meta .venue { color: var(--ink-3); }
+  .mc-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--card); font-size: 11.5px; font-weight: 500; }
+  .btn:hover { background: var(--green-wash); border-color: var(--green); }
+  .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  .btn.primary:hover { background: var(--forest); }
+  .btn[disabled] { opacity: .55; cursor: default; }
+  .btn-quiet { padding: 0; border: 0; background: none; font-size: 11.5px; color: var(--moss); text-decoration: underline; text-underline-offset: 3px; }
+  .detail { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 12px; }
+  .inn-row { display: grid; grid-template-columns: minmax(120px, 1fr) auto auto; gap: 14px; align-items: baseline; padding: 4px 0; font-size: 12.5px; }
+  .inn-row b { font-family: var(--serif); font-size: 17px; font-weight: 600; }
+  .inn-row span:last-child { font-family: var(--mono); font-size: 9px; color: var(--ink-3); }
+  .warn-box { margin-top: 10px; padding: 9px 11px; border-radius: var(--r-sm); background: color-mix(in srgb, var(--test) 8%, transparent); font-size: 11.5px; color: var(--ink-2); }
+  .warn-box b { display: block; font-family: var(--mono); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: var(--test); margin-bottom: 3px; }
+  .warn-box ul { margin: 0; padding-left: 16px; }
+  .loading, .note { font-size: 12px; color: var(--ink-3); }
+
+  .monitor { position: sticky; top: 84px; padding-top: 6px; }
+  .mon-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .mon-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line-soft); border: 1px solid var(--line-soft); border-radius: var(--r-lg); overflow: hidden; }
+  .mon-metric { background: var(--card); padding: 12px 13px; }
+  .mon-metric .l { font-family: var(--mono); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+  .mon-metric .v { font-family: var(--serif); font-size: 24px; font-weight: 600; line-height: 1.1; margin-top: 3px; }
+  .mon-metric .s { font-size: 10px; color: var(--ink-3); }
+  .mon-block { margin-top: 16px; }
+  .mon-block h3 { font-family: var(--mono); font-size: 8px; font-weight: 400; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
+  .bar-row { display: grid; grid-template-columns: 66px 1fr 34px; gap: 8px; align-items: center; padding: 2px 0; font-size: 11px; }
+  .bar-row .bar { height: 4px; border-radius: 2px; background: var(--paper-2); overflow: hidden; }
+  .bar-row .bar i { display: block; height: 100%; background: var(--moss); }
+  .bar-row .n { font-family: var(--mono); font-size: 9px; color: var(--ink-3); text-align: right; }
+  .stat-line { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dotted var(--line-soft); font-size: 11.5px; }
+  .stat-line span { color: var(--ink-2); }
+  .stat-line b { font-family: var(--mono); font-size: 10px; font-weight: 400; }
+  .mon-note { margin-top: 16px; font-size: 11px; line-height: 1.6; color: var(--ink-3); }
+  .mon-links { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+  .mon-links a { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); font-family: var(--mono); font-size: 9px; letter-spacing: .04em; color: var(--ink-2); }
+  .mon-links a:hover { border-color: var(--line-strong); color: var(--ink); }
+
+  .site-foot { border-top: 1px solid var(--line); margin-top: 44px; padding: 28px 0 40px; }
+  .foot-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 28px; }
+  .site-foot p { font-size: 12px; color: var(--ink-3); margin-bottom: 10px; }
+  .site-foot strong { display: block; font-family: var(--mono); font-size: 8px; font-weight: 400; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 3px; }
+  .site-foot code { font-family: var(--mono); font-size: 10px; color: var(--ink-2); }
+
+  @media (max-width: 1180px) {
+    .workbench { grid-template-columns: 190px minmax(0, 1fr); }
+    .monitor { display: none; }
+  }
+  @media (max-width: 900px) {
+    .wrap { width: calc(100% - 32px); }
+    .workbench { grid-template-columns: 1fr; }
+    .rail { position: static; max-height: none; }
+    .hero-grid { grid-template-columns: 1fr; }
+    .top-nav { display: none; }
+    .grid { overflow-x: auto; }
+    .day { min-height: 78px; }
+    .foot-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#calendar">Skip to calendar</a>
+
+<header class="site-head">
+  <div class="wrap bar">
+    <a class="brand" href="./" aria-label="Cricket Lake downloads">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M8.1 4.3c2.7 4.8 2.7 10.6 0 15.4M15.9 4.3c-2.7 4.8-2.7 10.6 0 15.4" fill="none" stroke="currentColor" stroke-width="1.1" stroke-dasharray="1.5 2.1"/>
+      </svg>
+      <span class="brand-name"><b>Cricket Lake</b><span>calendar</span></span>
+    </a>
+    <div class="head-tools">
+      <nav class="top-nav" aria-label="Site">
+        <a href="./">Slices</a>
+        <a href="calendar.html" aria-current="page">Calendar</a>
+      </nav>
+      <div class="segmented" role="group" aria-label="Reading mode">
+        <button type="button" data-mode="paper" aria-pressed="true">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+          Paper
+        </button>
+        <button type="button" data-mode="dusk" aria-pressed="false">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 9.8A5.6 5.6 0 0 1 6.2 3a5.6 5.6 0 1 0 6.8 6.8Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+          Dusk
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <section class="hero">
+    <div class="eyebrow">Match calendar · published lake</div>
+    <div class="hero-grid">
+      <h1>Every match, <em>dated.</em></h1>
+      <div class="hero-side">
+        <p class="lede">Pick a year, then a day. Open a match to check its innings and validation tier, or download that single match JSON — no zip, no slice.</p>
+      </div>
+    </div>
+    <div class="meta-line">
+      <span>Updated <b id="meta-updated">—</b></span>
+      <span class="dot"></span>
+      <span><b id="meta-range">—</b></span>
+      <span class="dot"></span>
+      <span><b id="meta-matches">—</b> matches</span>
+      <span class="dot"></span>
+      <span><b id="meta-years">—</b> years</span>
+    </div>
+  </section>
+
+  <div class="workbench" id="calendar">
+    <aside class="rail" aria-label="Filters">
+      <div class="rail-label"><span>Filter archive</span><span class="rail-count" id="rail-count">—</span></div>
+      <button class="reset" id="reset" type="button">Reset</button>
+      <div id="year-archive"></div>
+      <div class="filter-block">
+        <h2>Format</h2>
+        <div class="chips" id="format-chips"></div>
+      </div>
+      <div class="filter-block">
+        <h2>Status</h2>
+        <div class="chips" id="status-chips"></div>
+      </div>
+      <div class="filter-block">
+        <h2>Teams involved</h2>
+        <select class="field" id="team-select" aria-label="Team"></select>
+      </div>
+      <div class="filter-block">
+        <h2>Host country</h2>
+        <select class="field" id="country-select" aria-label="Host country"></select>
+      </div>
+    </aside>
+
+    <main class="desk">
+      <div class="month-bar">
+        <button class="nav-btn" id="prev" type="button" aria-label="Previous month"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M10 3.5 5.5 8 10 12.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div>
+          <span class="month-title" id="month-title">—</span>
+          <span class="month-count" id="month-count"></span>
+        </div>
+        <button class="nav-btn" id="next" type="button" aria-label="Next month"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="btn today" id="today" type="button">Latest day</button>
+      </div>
+      <div class="month-strip" id="month-strip"></div>
+      <div class="week-head" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+      <div class="grid" id="grid"></div>
+      <div class="day-head"><h2 id="day-title">Select any day</h2><span id="day-count">to open its matches</span></div>
+      <div id="day-list"><div class="empty">Choose a day in the grid above. Each match opens with its innings and a single-match JSON download.</div></div>
+    </main>
+
+    <aside class="monitor" aria-label="Archive summary">
+      <div class="mon-head"><span>Monitor</span><span id="mon-year">—</span></div>
+      <div class="mon-metrics">
+        <div class="mon-metric"><div class="l">Matches</div><div class="v" id="stat-matches">—</div><div class="s" id="stat-scope">—</div></div>
+        <div class="mon-metric"><div class="l">Competitions</div><div class="v" id="stat-comps">—</div><div class="s">in this view</div></div>
+        <div class="mon-metric"><div class="l">Venues</div><div class="v" id="stat-venues">—</div><div class="s">host grounds</div></div>
+        <div class="mon-metric"><div class="l">Days played</div><div class="v" id="stat-days">—</div><div class="s">with a match</div></div>
+      </div>
+      <div class="mon-block">
+        <h3>Formats</h3>
+        <div id="format-bars"></div>
+      </div>
+      <div class="mon-block">
+        <h3>Validation</h3>
+        <div id="status-lines"></div>
+      </div>
+      <div class="mon-block">
+        <h3>Largest competitions</h3>
+        <div id="comp-lines"></div>
+      </div>
+      <div class="mon-links">
+        <a href="./">Download slices <svg width="11" height="11" viewBox="0 0 16 16"><path d="M4 12 12 4M6 4h6v6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <a href="downloads.json">downloads.json <svg width="11" height="11" viewBox="0 0 16 16"><path d="M4 12 12 4M6 4h6v6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </div>
+      <p class="mon-note">Per-match files are gzipped and fetched on demand, then decompressed in your browser. Larger archives are still available as slices.</p>
+    </aside>
+  </div>
+</div>
+
+<footer class="site-foot">
+  <div class="wrap foot-grid">
+    <div>
+      <p><strong>How to use</strong>Select a year and a month, then a day. Each match card opens its innings from the published JSON and offers a single-match download (<code>&lt;match_id&gt;.json.gz</code>, decompressed on save).</p>
+    </div>
+    <div>
+      <p><strong>Source</strong>ESPNcricinfo match pages, assembled by <a href="https://github.com/iam-Hemanth/cricket-lake-unfiltered">cricket-lake-unfiltered</a>. Check the source terms before redistributing.</p>
+    </div>
+    <div>
+      <p><strong>Tiers</strong>Clean, warning and source-gap records are all published with their caveats. Quarantined matches do not appear here.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = new Intl.NumberFormat("en-US");
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const FMT_CLASS = { "Test":"test", "ODI":"odi", "T20I":"t20i", "T20":"t20", "FC":"fc", "First-Class":"fc", "List A":"lista", "ListA":"lista", "Other":"other" };
+const FMT_LABEL = { "FC":"First-class", "ListA":"List A", "Other":"Other" };
+const ABBR = {
+  "India":"IND","Pakistan":"PAK","Sri Lanka":"SL","Australia":"AUS","England":"ENG","New Zealand":"NZ","South Africa":"SA",
+  "West Indies":"WI","Bangladesh":"BAN","Zimbabwe":"ZIM","Afghanistan":"AFG","Ireland":"IRE","Netherlands":"NED","Scotland":"SCO",
+  "Nepal":"NEP","Namibia":"NAM","Oman":"OMA","United States of America":"USA","United Arab Emirates":"UAE","Hong Kong":"HK",
+  "Canada":"CAN","Kenya":"KEN","Bermuda":"BER","Jersey":"JER","Malaysia":"MAS","Uganda":"UGA","Papua New Guinea":"PNG",
+  "Qatar":"QAT","Kuwait":"KUW","Bahrain":"BHR","Saudi Arabia":"KSA","Singapore":"SGP","Denmark":"DEN","Italy":"ITA",
+  "Germany":"GER","Austria":"AUT","Belgium":"BEL","France":"FRA","Spain":"ESP","Portugal":"POR","Gibraltar":"GIB",
+  "Israel":"ISR","Turkey":"TUR","Czech Republic":"CZE","Finland":"FIN","Sweden":"SWE","Norway":"NOR","Estonia":"EST",
+  "Luxembourg":"LUX","Isle of Man":"IOM","Guernsey":"GGY","Nigeria":"NGA","Tanzania":"TAN","Botswana":"BOT","Rwanda":"RWA",
+  "Mozambique":"MOZ","Ghana":"GHA","Sierra Leone":"SLE","Cameroon":"CMR","Malawi":"MWI","Lesotho":"LES","Eswatini":"SWZ"
+};
+
+function abbr(name) {
+  if (!name) return "—";
+  if (ABBR[name]) return ABBR[name];
+  const words = name.split(/\s+/).filter(Boolean);
+  if (!words.length) return "—";
+  if (words.length === 1) return name.slice(0, 3).toUpperCase();
+  if (words[0].length <= 3 && words[0] === words[0].toUpperCase()) return words[0];
+  return words.map((w) => w[0]).join("").slice(0, 3).toUpperCase();
+}
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+function fmtClass(f) { return FMT_CLASS[f] || "other"; }
+function fmtLabel(f) { return FMT_LABEL[f] || f || "Other"; }
+function statusLabel(s) { return s === "source_gap" ? "Source gap" : s === "warning" ? "Warning" : "Clean"; }
+function fmtDate(d) {
+  if (!d) return "Date unknown";
+  const [y, m, day] = d.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, day));
+  return `${DAYS[dt.getUTCDay()]}, ${day} ${MONTHS[m - 1]} ${y}`;
+}
+
+let DATA = null;
+let BY_DATE = new Map();
+let FILTERED = [];
+let CACHE = new Map();
+let SLICES = null;
+let BUILD = "";
+const state = { year: null, month: 0, selected: null, q: "", format: "", status: "", team: "", country: "" };
+
+/* ------------------------------ theme ------------------------------ */
+const stored = localStorage.getItem("lake-mode");
+if (stored === "dusk") document.documentElement.setAttribute("data-mode", "dusk");
+document.querySelectorAll(".segmented [data-mode]").forEach((b) => {
+  b.setAttribute("aria-pressed", String(b.dataset.mode === document.documentElement.getAttribute("data-mode")));
+  b.addEventListener("click", () => {
+    document.documentElement.setAttribute("data-mode", b.dataset.mode);
+    localStorage.setItem("lake-mode", b.dataset.mode);
+    document.querySelectorAll(".segmented [data-mode]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  });
+});
+
+/* ------------------------------ data ------------------------------ */
+function matchYear(m) { return m.d ? Number(m.d.slice(0, 4)) : null; }
+function passes(m) {
+  if (state.year && matchYear(m) !== state.year) return false;
+  if (state.format && m.f !== state.format) return false;
+  if (state.status && m.s !== state.status) return false;
+  if (state.team && m.a !== state.team && m.b !== state.team) return false;
+  if (state.country && m.y !== state.country) return false;
+  if (state.q) {
+    const needle = state.q.toLowerCase();
+    if (![m.a, m.b, m.c, m.v, m.r].some((x) => (x || "").toLowerCase().includes(needle))) return false;
+  }
+  return true;
+}
+function refilter() {
+  FILTERED = DATA.matches.filter(passes);
+  BY_DATE = new Map();
+  for (const m of FILTERED) {
+    if (!m.d) continue;
+    if (!BY_DATE.has(m.d)) BY_DATE.set(m.d, []);
+    BY_DATE.get(m.d).push(m);
+  }
+  $("rail-count").textContent = `${fmt.format(FILTERED.length)} matches`;
+  renderMonthStrip();
+  renderGrid();
+  renderDay();
+  renderMonitor();
+}
+
+/* ------------------------------ rail ------------------------------ */
+function renderArchive() {
+  const era = [
+    { label: "Modern era (2020 – 2026)", from: 2020, to: 2026 },
+    { label: "Transition era (2014 – 2019)", from: 2014, to: 2019 },
+    { label: "Early era (2001 – 2013)", from: 2001, to: 2013 },
+  ];
+  const years = DATA.years;
+  const host = $("year-archive");
+  host.innerHTML = "";
+  const all = document.createElement("div");
+  all.className = "era-label";
+  all.textContent = "Year archive";
+  host.appendChild(all);
+
+  for (const group of era) {
+    const inGroup = years.filter((y) => Number(y.y) >= group.from && Number(y.y) <= group.to);
+    if (!inGroup.length) continue;
+    const label = document.createElement("div");
+    label.className = "era-label";
+    label.textContent = group.label;
+    host.appendChild(label);
+    const list = document.createElement("div");
+    list.className = "year-list";
+    for (const y of inGroup) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "year-btn";
+      b.setAttribute("aria-pressed", String(Number(y.y) === state.year));
+      b.innerHTML = `<b>${y.y}</b><span>${fmt.format(y.n)}</span>`;
+      b.addEventListener("click", () => {
+        state.year = Number(y.y);
+        state.selected = null;
+        const latest = latestMonthForYear(state.year);
+        state.month = latest;
+        renderArchive(); refilter(); syncHash();
+      });
+      list.appendChild(b);
+    }
+    host.appendChild(list);
+  }
+  const allBtn = document.createElement("button");
+  allBtn.type = "button";
+  allBtn.className = "year-btn all-time";
+  allBtn.innerHTML = `<b>All time</b><span>${fmt.format(DATA.total)} matches</span>`;
+  allBtn.addEventListener("click", resetFilters);
+  host.appendChild(allBtn);
+}
+
+function renderFormatChips() {
+  const counts = DATA.formats;
+  const host = $("format-chips");
+  host.innerHTML = "";
+  const order = ["Test","ODI","T20I","T20","FC","List A","Other"];
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const chips = [{ key: "", label: "All", n: total }].concat(
+    order.filter((f) => counts[f]).map((f) => ({ key: f, label: fmtLabel(f), n: counts[f] }))
+  );
+  for (const c of chips) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.setAttribute("aria-pressed", String(state.format === c.key));
+    b.innerHTML = `${esc(c.label)} <span class="n">${fmt.format(c.n)}</span>`;
+    b.addEventListener("click", () => {
+      state.format = c.key;
+      state.selected = null;
+      renderFormatChips(); refilter(); syncHash();
+    });
+    host.appendChild(b);
+  }
+}
+
+function renderStatusChips() {
+  const host = $("status-chips");
+  host.innerHTML = "";
+  const options = [
+    { key: "", label: "All", n: DATA.total },
+    { key: "clean", label: "Clean", n: DATA.statuses.clean || 0 },
+    { key: "warning", label: "Warning", n: DATA.statuses.warning || 0 },
+    { key: "source_gap", label: "Source gap", n: DATA.statuses.source_gap || 0 },
+  ];
+  for (const c of options) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.setAttribute("aria-pressed", String(state.status === c.key));
+    b.innerHTML = `${esc(c.label)} <span class="n">${fmt.format(c.n)}</span>`;
+    b.addEventListener("click", () => {
+      state.status = c.key;
+      state.selected = null;
+      renderStatusChips(); refilter(); syncHash();
+    });
+    host.appendChild(b);
+  }
+}
+
+function fillSelect(id, values, label) {
+  const sel = $(id);
+  sel.innerHTML = `<option value="">${label}</option>`;
+  for (const v of values) {
+    const o = document.createElement("option");
+    o.value = v;
+    o.textContent = v;
+    sel.appendChild(o);
+  }
+}
+
+/* ------------------------------ month ------------------------------ */
+function latestMonthForYear(year) {
+  const inYear = DATA.matches.filter((m) => m.d && Number(m.d.slice(0, 4)) === year);
+  if (!inYear.length) return 0;
+  return Math.max(...inYear.map((m) => Number(m.d.slice(5, 7)) - 1));
+}
+function latestDate() {
+  const dates = DATA.matches.map((m) => m.d).filter(Boolean).sort();
+  return dates[dates.length - 1] || null;
+}
+function renderMonthStrip() {
+  const host = $("month-strip");
+  host.innerHTML = "";
+  const counts = new Array(12).fill(0);
+  for (const m of FILTERED) {
+    if (!m.d) continue;
+    counts[Number(m.d.slice(5, 7)) - 1]++;
+  }
+  for (let i = 0; i < 12; i++) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "mcell";
+    b.setAttribute("aria-pressed", String(i === state.month));
+    b.innerHTML = `<b>${MONTHS_SHORT[i]}</b><span>${counts[i] ? fmt.format(counts[i]) : "0"}</span>`;
+    b.addEventListener("click", () => { state.month = i; state.selected = null; renderMonthStrip(); renderGrid(); renderDay(); syncHash(); });
+    host.appendChild(b);
+  }
+}
+function renderGrid() {
+  const grid = $("grid");
+  grid.innerHTML = "";
+  const year = state.year;
+  const month = state.month;
+  $("month-title").textContent = `${MONTHS[month]} ${year}`;
+  const monthMatches = FILTERED.filter((m) => m.d && Number(m.d.slice(0, 4)) === year && Number(m.d.slice(5, 7)) - 1 === month);
+  $("month-count").textContent = `${fmt.format(monthMatches.length)} matches`;
+  const first = new Date(Date.UTC(year, month, 1));
+  const start = (first.getUTCDay() + 6) % 7; // Monday first
+  const days = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const cells = Math.ceil((start + days) / 7) * 7;
+  for (let i = 0; i < cells; i++) {
+    const dayNum = i - start + 1;
+    const inMonth = dayNum >= 1 && dayNum <= days;
+    const cell = document.createElement(inMonth ? "button" : "div");
+    cell.className = "day" + (inMonth ? "" : " out");
+    if (inMonth) {
+      cell.type = "button";
+      const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+      const items = BY_DATE.get(key) || [];
+      if (state.selected === key) cell.classList.add("selected");
+      if (key === todayKey) cell.classList.add("today");
+      const num = document.createElement("span");
+      num.className = "day-num";
+      num.textContent = dayNum;
+      cell.appendChild(num);
+      const visible = items.slice(0, 3);
+      for (const m of visible) {
+        const chip = document.createElement("span");
+        chip.className = "mchip" + (m.s === "source_gap" ? " gap" : "");
+        chip.innerHTML = `<i style="background:var(--${fmtClass(m.f)})"></i>${esc(abbr(m.a))} v ${esc(abbr(m.b))}`;
+        cell.appendChild(chip);
+      }
+      if (items.length > visible.length) {
+        const more = document.createElement("span");
+        more.className = "more";
+        more.textContent = `+${items.length - visible.length} more`;
+        cell.appendChild(more);
+      }
+      cell.addEventListener("click", () => {
+        state.selected = key;
+        renderGrid();
+        renderDay();
+        syncHash();
+        const head = $("day-title");
+        if (head) head.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    } else {
+      cell.innerHTML = `<span class="day-num">${dayNum <= 0 ? new Date(Date.UTC(year, month, 0)).getUTCDate() + dayNum : dayNum - days}</span>`;
+    }
+    grid.appendChild(cell);
+  }
+}
+
+/* ------------------------------ day list ------------------------------ */
+function renderDay() {
+  const host = $("day-list");
+  const head = $("day-title");
+  const count = $("day-count");
+  if (!state.selected) {
+    head.textContent = "Select any day";
+    count.textContent = "to open its matches";
+    host.innerHTML = `<div class="empty">Choose a day in the grid above. Each match opens with its innings and a single-match JSON download.</div>`;
+    return;
+  }
+  const items = BY_DATE.get(state.selected) || [];
+  head.textContent = fmtDate(state.selected);
+  count.textContent = `${fmt.format(items.length)} ${items.length === 1 ? "match" : "matches"}`;
+  if (!items.length) {
+    host.innerHTML = `<div class="empty">No matches on this day in the current filter.</div>`;
+    return;
+  }
+  host.innerHTML = "";
+  for (const m of items) {
+    const card = document.createElement("article");
+    card.className = "match-card";
+    const badge = m.s === "clean" ? "" : `<span class="badge ${m.s}">${statusLabel(m.s)}</span>`;
+    card.innerHTML = `
+      <div class="mc-top">
+        <span class="ftag"><i style="background:var(--${fmtClass(m.f)})"></i>${esc(fmtLabel(m.f))}</span>
+        <span class="comp">${esc(m.c || "Competition unknown")}</span>
+        ${badge}
+      </div>
+      <div class="mc-teams">${esc(m.a)} <span style="color:var(--ink-3);font-weight:400;font-size:15px">v</span> ${esc(m.b)}</div>
+      <div class="mc-meta">
+        <span>${esc(m.r || "Result not recorded")}</span>
+        ${m.v ? `<span class="venue">${esc(m.v)}</span>` : ""}
+      </div>
+      <div class="mc-actions">
+        <button class="btn" type="button" data-details>Check match</button>
+        <button class="btn primary" type="button" data-download ${m.x ? "" : "disabled"}>${m.x ? "Download JSON" : "JSON unavailable"}</button>
+        <button class="btn-quiet" type="button" data-slice>Slice</button>
+      </div>
+      <div class="detail" hidden></div>`;
+    const detail = card.querySelector(".detail");
+    card.querySelector("[data-details]").addEventListener("click", () => toggleDetails(m, detail, card));
+    const dl = card.querySelector("[data-download]");
+    if (m.x) dl.addEventListener("click", () => downloadMatch(m.i, dl));
+    card.querySelector("[data-slice]").addEventListener("click", () => openSlice(m, card));
+    host.appendChild(card);
+  }
+}
+
+async function fetchMatch(id) {
+  if (CACHE.has(id)) return CACHE.get(id);
+  const res = await fetch(`m/${id}.json.gz?v=${encodeURIComponent(BUILD)}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const buf = new Uint8Array(await res.arrayBuffer());
+  const isGzip = buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b;
+  let text;
+  if (!isGzip) {
+    text = new TextDecoder().decode(buf);
+  } else if ("DecompressionStream" in window) {
+    const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
+    text = await new Response(stream).text();
+  } else {
+    throw new Error("This browser cannot decompress gzip.");
+  }
+  const data = JSON.parse(text);
+  CACHE.set(id, data);
+  return data;
+}
+
+async function toggleDetails(m, detail, card) {
+  if (!detail.hidden) {
+    detail.hidden = true;
+    card.querySelector("[data-details]").textContent = "Check match";
+    return;
+  }
+  detail.hidden = false;
+  card.querySelector("[data-details]").textContent = "Hide match";
+  if (detail.dataset.loaded) return;
+  detail.innerHTML = `<p class="loading">Reading the published JSON…</p>`;
+  try {
+    const data = await fetchMatch(m.i);
+    const inns = (data.innings || []).map((inn) => {
+      const sc = inn.source_scorecard || {};
+      const balls = sc.balls;
+      const overs = balls != null ? `${Math.floor(balls / 6)}.${balls % 6}` : "—";
+      return `<div class="inn-row"><span>${esc(inn.batting_team || "—")}</span><b>${sc.runs ?? "—"}/${sc.wickets ?? "—"}</b><span>${overs} ov</span></div>`;
+    }).join("");
+    const warnings = (data.meta?.validation_warnings || []).map((w) => `<li>${esc(w)}</li>`).join("");
+    const status = data.meta?.validation_status || "clean";
+    detail.innerHTML = `
+      <div class="detail-body">
+        ${inns || `<p class="note">No innings in this record.</p>`}
+        ${warnings ? `<div class="warn-box"><b>${status === "source_gap" ? "Source gap" : "Recorded warnings"}</b><ul>${warnings}</ul></div>` : ""}
+        <p class="note" style="margin-top:8px">Match ${esc(m.i)} · ${data.meta?.dates?.[0] || m.d} · ${esc(data.meta?.competition || m.c)} · ${esc(status)}</p>
+      </div>`;
+    detail.dataset.loaded = "1";
+  } catch (err) {
+    detail.innerHTML = `<p class="note">Could not read the match file (${esc(err.message)}). Use the download button and unzip locally.</p>`;
+  }
+}
+
+async function downloadMatch(id, btn) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Preparing…";
+  try {
+    const res = await fetch(`m/${id}.json.gz?v=${encodeURIComponent(BUILD)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const isGzip = buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b;
+    let blob, name = `${id}.json`;
+    if (isGzip && "DecompressionStream" in window) {
+      const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
+      blob = await new Response(stream).blob();
+    } else {
+      blob = new Blob([buf], { type: isGzip ? "application/gzip" : "application/json" });
+      if (isGzip) name = `${id}.json.gz`;
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    btn.textContent = "Downloaded";
+  } catch (err) {
+    btn.textContent = "Failed";
+  } finally {
+    setTimeout(() => { btn.disabled = false; btn.textContent = label; }, 1700);
+  }
+}
+
+async function openSlice(m, card) {
+  try {
+    if (!SLICES) {
+      const res = await fetch("downloads.json");
+      const data = await res.json();
+      SLICES = new Map();
+      for (const group of data.groups || []) {
+        for (const sub of group.subgroups || []) {
+          for (const s of sub.slices || []) SLICES.set(s.id, s);
+        }
+      }
+    }
+    const slice = SLICES.get(m.sl);
+    if (slice) {
+      window.open(slice.url, "_blank", "noopener");
+    } else {
+      const note = document.createElement("p");
+      note.className = "note";
+      note.textContent = "No slice recorded for this match.";
+      card.querySelector(".mc-actions").appendChild(note);
+    }
+  } catch (err) {
+    /* ignore */
+  }
+}
+
+/* ------------------------------ monitor ------------------------------ */
+function renderMonitor() {
+  const scope = state.year ? String(state.year) : "All time";
+  $("mon-year").textContent = scope;
+  $("stat-matches").textContent = fmt.format(FILTERED.length);
+  $("stat-scope").textContent = state.year ? "in this year" : "across all years";
+  const comps = new Set(FILTERED.map((m) => m.c).filter(Boolean));
+  const venues = new Set(FILTERED.map((m) => m.v).filter(Boolean));
+  const days = new Set(FILTERED.map((m) => m.d).filter(Boolean));
+  $("stat-comps").textContent = fmt.format(comps.size);
+  $("stat-venues").textContent = fmt.format(venues.size);
+  $("stat-days").textContent = fmt.format(days.size);
+
+  const fcounts = {};
+  for (const m of FILTERED) fcounts[m.f] = (fcounts[m.f] || 0) + 1;
+  const fmax = Math.max(1, ...Object.values(fcounts));
+  $("format-bars").innerHTML = Object.entries(fcounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([f, n]) => `<div class="bar-row"><span>${esc(fmtLabel(f))}</span><span class="bar"><i style="width:${(n / fmax * 100).toFixed(1)}%"></i></span><span class="n">${fmt.format(n)}</span></div>`)
+    .join("") || `<p class="note">No matches.</p>`;
+
+  const scounts = { clean: 0, warning: 0, source_gap: 0 };
+  for (const m of FILTERED) scounts[m.s] = (scounts[m.s] || 0) + 1;
+  $("status-lines").innerHTML = `
+    <div class="stat-line"><span>Clean</span><b>${fmt.format(scounts.clean || 0)}</b></div>
+    <div class="stat-line"><span>Warning</span><b>${fmt.format(scounts.warning || 0)}</b></div>
+    <div class="stat-line"><span>Source gap</span><b>${fmt.format(scounts.source_gap || 0)}</b></div>`;
+
+  const ccounts = {};
+  for (const m of FILTERED) if (m.c) ccounts[m.c] = (ccounts[m.c] || 0) + 1;
+  $("comp-lines").innerHTML = Object.entries(ccounts)
+    .sort((a, b) => b[1] - a[1]).slice(0, 6)
+    .map(([c, n], i) => `<div class="stat-line"><span>${i + 1}. ${esc(c)}</span><b>${fmt.format(n)}</b></div>`)
+    .join("") || `<p class="note">No competitions.</p>`;
+}
+
+/* ------------------------------ boot ------------------------------ */
+function syncHash() {
+  const parts = [];
+  if (state.year) parts.push(state.year);
+  if (state.selected) parts.push(state.selected);
+  history.replaceState(null, "", parts.length ? `#${parts.join("/")}` : location.pathname);
+}
+function resetFilters() {
+  state.format = ""; state.status = ""; state.team = ""; state.country = ""; state.q = "";
+  state.selected = null;
+  if (DATA) {
+    state.year = Number(DATA.years[0]?.y) || null;
+    state.month = state.year ? latestMonthForYear(state.year) : 0;
+  }
+  renderArchive(); renderFormatChips(); renderStatusChips();
+  $("team-select").value = ""; $("country-select").value = "";
+  refilter(); syncHash();
+}
+
+fetch("calendar.json").then((r) => r.json()).then((data) => {
+  DATA = data;
+  BUILD = data.generated_at || "";
+  const latest = latestDate();
+  const latestYear = latest ? Number(latest.slice(0, 4)) : Number(data.years[0]?.y);
+  state.year = latestYear;
+  state.month = latest ? Number(latest.slice(5, 7)) - 1 : 0;
+  const hash = location.hash.replace("#", "");
+  if (hash) {
+    const [y, d] = hash.split("/");
+    if (Number(y) >= 2000) { state.year = Number(y); state.month = d ? Number(d.slice(5, 7)) - 1 : state.month; state.selected = d || null; }
+  }
+  $("meta-updated").textContent = (data.generated_at || "").slice(0, 10) || "—";
+  $("meta-range").textContent = `${data.date_range.earliest || "—"} → ${data.date_range.latest || "—"}`;
+  $("meta-matches").textContent = fmt.format(data.total);
+  $("meta-years").textContent = fmt.format(data.years.length);
+
+  const teams = {};
+  const countries = {};
+  for (const m of data.matches) {
+    if (m.a) teams[m.a] = (teams[m.a] || 0) + 1;
+    if (m.b) teams[m.b] = (teams[m.b] || 0) + 1;
+    if (m.y) countries[m.y] = (countries[m.y] || 0) + 1;
+  }
+  fillSelect("team-select", Object.entries(teams).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t), "All teams");
+  fillSelect("country-select", Object.entries(countries).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([c]) => c), "All countries");
+  $("team-select").addEventListener("change", (e) => { state.team = e.target.value; state.selected = null; refilter(); syncHash(); });
+  $("country-select").addEventListener("change", (e) => { state.country = e.target.value; state.selected = null; refilter(); syncHash(); });
+  $("reset").addEventListener("click", resetFilters);
+  $("prev").addEventListener("click", () => { state.month = (state.month + 11) % 12; if (state.month === 11) state.year -= 1; state.selected = null; renderArchive(); refilter(); syncHash(); });
+  $("next").addEventListener("click", () => { state.month = (state.month + 1) % 12; if (state.month === 0) state.year += 1; state.selected = null; renderArchive(); refilter(); syncHash(); });
+  $("today").addEventListener("click", () => {
+    const d = latestDate();
+    if (!d) return;
+    state.year = Number(d.slice(0, 4));
+    state.month = Number(d.slice(5, 7)) - 1;
+    state.selected = d;
+    renderArchive(); refilter(); syncHash();
+    document.getElementById("day-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  renderArchive(); renderFormatChips(); renderStatusChips();
+  refilter();
+  if (state.selected) document.getElementById("day-title")?.scrollIntoView({ block: "start" });
+
+  const search = document.createElement("label");
+  search.className = "search";
+  search.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:7px 11px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--card);max-width:420px";
+  search.innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="m10.5 10.5 3 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg><input type="search" placeholder="Search teams, competitions, venues…" style="border:0;background:none;outline:none;flex:1;font-size:12px" aria-label="Search matches">`;
+  const input = search.querySelector("input");
+  input.addEventListener("input", () => { state.q = input.value.trim(); state.selected = null; refilter(); });
+  document.querySelector(".month-bar").after(search);
+}).catch((err) => {
+  document.getElementById("grid").innerHTML = `<div class="empty" style="grid-column:1/-1">Could not load calendar.json (${esc(err.message)}).</div>`;
+});
+</script>
+</body>
+</html>

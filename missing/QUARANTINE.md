@@ -3,11 +3,11 @@
 Source: `matches_batch_recovery_20261025.tar.gz` on the `data-unfiltered-batches`
 release. Every match below carried `meta.validation_status = "failed"` in that
 batch. As of 09 Nov 2026, **1,289 have been admitted to the published lake** as
-`validation_status = "warning"` (their recorded warnings are preserved), **77
+`validation_status = "warning"` (their recorded warnings are preserved), **230
 more as `validation_status = "source_gap"`**, and the master grew from 16,856 to
-**18,227 matches**. **803 remain quarantined.** This document's first half is
+**18,381 matches**. **650 remain quarantined.** This document's first half is
 the original pool analysis; the second half is the measured state of the **880
-that still fail**, followed by the source-gap tier and the re-fetch receipts.
+that still fail**, followed by the source-gap tier and the two re-fetch passes.
 The archive also contains 217 clean matches that were already admitted.
 
 ## Who was in the quarantine pool
@@ -208,11 +208,53 @@ already downloaded its deltas. The next consolidate folds it into the master.
 - The 5 delta-window ids that failed on 7-8 Nov (1561358, 1554068, 1555414,
   1558436, 1559692) were never in the recovery batch and remain missing.
 
+## Corrected re-fetch (run 42649214897) and the 230 admits (09 Nov 2026)
+
+The corrected filter selected exactly **880** still-failing ids (verified from
+`quarantine_ids.txt`), and all 20 chunks ran in parallel. The merge job
+published `refetch-results` with **0 pass / 880 still-failing**.
+
+- A fresh extraction of a genuinely failing match reproduces the failure:
+  these are source defects, not truncated original parses. Every "pass" in the
+  previous run was an already-published warn-tier match; no quarantined match
+  has been recovered by re-fetch.
+- The source-gap gate admits **230 of the 880** — 97 FC, 59 T20, 31 List A,
+  25 T20I, 18 other — with 475 disallowed error kinds, 156 summed deltas above
+  threshold and 19 over-length overs. This is exactly the count the pre-refetch
+  estimate predicted.
+- 77 of the 230 were already published in run 42642702549; **153 are new**.
+- Asset: `matches_batch_sourcegap_20261109T164604Z-42657718454.tar.gz`
+  (6,767,900 bytes; sha256 verified; 230 files, all with the status, warning
+  list and delta record). It sorts after the 77-asset, so it wins for the
+  overlapping ids.
+
+### Final counts after the second pass
+
+| Measure | Count |
+| --- | ---: |
+| Master matches | **18,381** (18,227 + 1 delta + 153 new source-gap) |
+| `coverage.quarantined_matches` | **650** (880 - 230) |
+| `coverage.warning_matches` | **1,289** |
+| `coverage.source_gap_matches` | **230** |
+| `matches_index.csv` statuses | 16,862 clean / 1,289 warning / 230 source-gap |
+| Date range | 2001-12-19 to 2026-11-09 |
+
+### Residual after the second pass
+
+- **650 quarantined**, all re-fetched today and still failing: 475 carry a
+  disallowed error kind, 156 exceed the small-delta threshold, 19 have
+  over-length overs with no adjacent pair.
+- The 5 delta-window ids that failed on 7-8 Nov (1561358, 1554068, 1555414,
+  1558436, 1559692) remain missing; they were never in the recovery batch.
+- The four abandoned ids 1554097/1554098 (women's) and 1558435/1558599
+  (running-score only) still need source data.
+
 ## Latest window is also missing 9 matches
 
 The 2026-11-09 05:01 UTC `Update lake (6-hourly)` run discovered 9 matches and
-all 9 failed validation, so no delta was published. They are dated 7–8 Nov and
-are absent from the catalog (which otherwise covers through 2026-11-08):
+all 9 failed validation, so no delta was published. Five were rediscovered by
+the 12:58 run and failed again; the catalog now covers through 2026-11-09, but
+these 9 ids are still absent:
 
 | Match | Date | Competition | Failure |
 | --- | --- | --- | --- |
@@ -243,23 +285,21 @@ v1 policy regardless.
    `missing_non_striker_deliveries`, and do not turn the absence into a hard
    `identity_issue`. This is already tolerated in the clean corpus (4,607
    deliveries), so it is a consistency fix, not a new allowance.
-3. **Re-fetch the 880 (partial — 328 of 880 covered).** `refetch_quarantine.yml`
-   re-downloads the still-quarantined ids with the production extractor,
-   publishes only the files that validate cleanly as
-   `matches_batch_refetch_*.tar.gz`, and leaves the rest in quarantine with a
-   failure artifact. Run 42630708983 covered only the first 880 stored-failed
-   ids, so 552 of its 552 passes were already-published warn-tier files and 552
-   quarantined ids were missed; the corrected filter now selects the true 880.
-4. **Decide the small-delta tier from the re-fetch evidence.** Done for the 328
-   re-fetched failures: 77 admitted as `source_gap` (run 42642702549) with
-   `validation_status`, the explicit warning list and `meta.source_gap`; 251
-   rejected. The 552 ids missed by the run still need this decision after their
-   re-fetch.
-5. **Leave the large-gap residual quarantined.** The current residual is **803**
-   matches (552 never re-fetched + 251 re-fetched but still failing). Missing
-   overs or innings cannot be repaired by a waiver; keep them in the recovery
-   batch and list them in the audit rather than publishing partial games as if
-   complete.
+3. **Re-fetch the 880 (done).** `refetch_quarantine.yml` re-downloads the
+   still-quarantined ids with the production extractor, publishes only the
+   files that validate cleanly as `matches_batch_refetch_*.tar.gz`, and leaves
+   the rest in quarantine with a failure artifact. Run 42630708983 covered only
+   the first 880 stored-failed ids (552 of its passes were already-published
+   warn-tier files and 552 quarantined ids were missed); the corrected filter
+   then covered the true 880 in run 42649214897 with 0 pass / 880 fail.
+4. **Decide the small-delta tier from the re-fetch evidence (done).** The gate
+   admitted 230 of the 880 as `source_gap` (runs 42642702549 and 42657718454)
+   with `validation_status`, the explicit warning list and `meta.source_gap`;
+   650 rejected. The 153 new admits are published.
+5. **Leave the large-gap residual quarantined.** The current residual is **650**
+   matches, all re-fetched today and still failing. Missing overs or innings
+   cannot be repaired by a waiver; keep them in the recovery batch and list
+   them in the audit rather than publishing partial games as if complete.
 
 ## Rebuild and verification
 
@@ -270,6 +310,6 @@ v1 policy regardless.
 - Rebuild the master, then the catalog; verify the new ids appear in
   `matches_index.csv` and that each slice's manifest count adds up.
 - Measured receipts: quarantined 2,169 → **880** (current validator after the
-  warning policy) → **803** after the 77 source-gap admits; the clean lake
-  16,856 → **18,145** (warn tier) → **18,227** (plus the 5-match delta and the
-  77 source-gap admits). Confirmed in `lake_manifest.json` (run 42643051903).
+  warning policy) → **650** after the 230 source-gap admits; the clean lake
+  16,856 → **18,145** (warn tier) → **18,381** (plus deltas and the 230
+  source-gap admits). Confirmed in `lake_manifest.json` (run 42658234882).

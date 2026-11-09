@@ -258,7 +258,7 @@ jobs:
   catalog:
     needs: [preflight, build]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     permissions:
       contents: write
     steps:
@@ -280,6 +280,26 @@ jobs:
           merge-multiple: true
           path: fragments
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+
+      - name: Download master and deltas for per-match files
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/deltas
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download"
+          while IFS= read -r name; do
+            [ -z "$name" ] && continue
+            if [ "$name" = "cricket_lake_unfiltered_master.tar.gz" ]; then
+              echo "$base/data-unfiltered-master/$name artifacts/$name"
+            else
+              echo "$base/data-unfiltered-deltas/$name artifacts/deltas/$name"
+            fi
+          done < release_assets.txt > calendar_downloads.txt
+          cat calendar_downloads.txt | xargs -r -n 2 -P 6 sh -c 'curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$2" "$1"' sh
+          test -s artifacts/cricket_lake_unfiltered_master.tar.gz
+
       - name: Build catalog
         run: |
           set -euo pipefail
@@ -288,6 +308,16 @@ jobs:
             --fragments-dir fragments \
             --template downloads/template.html \
             --max-total-bytes "${MAX_TOTAL_BYTES}" \
+            --out catalog_out
+
+      - name: Build calendar and per-match downloads
+        run: |
+          set -euo pipefail
+          python -m scripts.downloads.calendar \
+            --plan-dir download_plan \
+            --master-tar artifacts/cricket_lake_unfiltered_master.tar.gz \
+            --deltas-dir artifacts/deltas \
+            --fragments-dir fragments \
             --out catalog_out
 
       - name: Point catalog links at release assets
