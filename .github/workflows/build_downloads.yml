@@ -126,19 +126,15 @@ jobs:
           path: download_plan
           retention-days: 7
 
-      - name: Write release asset list
-        run: |
-          set -euo pipefail
-          jq -r '.assets[].name | select(startswith("lake_delta_") and endswith(".tar.gz"))' \
-            artifacts/delta_assets.json | sort > deltas.txt
-          { echo "cricket_lake_unfiltered_master.tar.gz"; cat deltas.txt; } > release_assets.txt
-          echo "$(wc -l < deltas.txt) delta assets"
-
-      - uses: actions/upload-artifact@v4
+      - name: Share master and deltas with the build jobs
+        # One CDN download for the whole run: 20 shards pulling the same
+        # 233 MB release asset at once makes the release CDN return 500s.
+        uses: actions/upload-artifact@v4
         with:
-          name: release-assets
-          path: release_assets.txt
-          retention-days: 7
+          name: source-archives
+          path: artifacts/
+          retention-days: 1
+          compression-level: 0
 
       - name: Check per-release asset budget
         run: |
@@ -188,35 +184,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: release-assets
-
-      - name: Download master and deltas
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/deltas
-          base="https://github.com/${GITHUB_REPOSITORY}/releases/download"
-          while IFS= read -r name; do
-            [ -z "$name" ] && continue
-            if [ "$name" = "cricket_lake_unfiltered_master.tar.gz" ]; then
-              echo "$base/data-unfiltered-master/$name artifacts/$name"
-            else
-              echo "$base/data-unfiltered-deltas/$name artifacts/deltas/$name"
-            fi
-          done < release_assets.txt > downloads.txt
-          fetch() {
-            for attempt in 1 2 3 4 5 6 7 8; do
-              if curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$2" "$1"; then
-                return 0
-              fi
-              echo "retry ${attempt}/8 for $1" >&2
-              sleep $((attempt * 2))
-            done
-            return 1
-          }
-          export -f fetch
-          cat downloads.txt | xargs -r -n 2 -P 4 bash -c 'fetch "$1" "$2"' sh
-          test -s artifacts/cricket_lake_unfiltered_master.tar.gz
-          echo "downloaded $(find artifacts/deltas -name '*.tar.gz' | wc -l) deltas"
+          name: source-archives
+          path: artifacts
 
       - name: Build shard ${{ matrix.shard }}
         run: |
@@ -293,34 +262,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: release-assets
-
-      - name: Download master and deltas for per-match files
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/deltas
-          base="https://github.com/${GITHUB_REPOSITORY}/releases/download"
-          while IFS= read -r name; do
-            [ -z "$name" ] && continue
-            if [ "$name" = "cricket_lake_unfiltered_master.tar.gz" ]; then
-              echo "$base/data-unfiltered-master/$name artifacts/$name"
-            else
-              echo "$base/data-unfiltered-deltas/$name artifacts/deltas/$name"
-            fi
-          done < release_assets.txt > calendar_downloads.txt
-          fetch() {
-            for attempt in 1 2 3 4 5 6 7 8; do
-              if curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$2" "$1"; then
-                return 0
-              fi
-              echo "retry ${attempt}/8 for $1" >&2
-              sleep $((attempt * 2))
-            done
-            return 1
-          }
-          export -f fetch
-          cat calendar_downloads.txt | xargs -r -n 2 -P 4 bash -c 'fetch "$1" "$2"' sh
-          test -s artifacts/cricket_lake_unfiltered_master.tar.gz
+          name: source-archives
+          path: artifacts
 
       - name: Build catalog
         run: |
