@@ -31,6 +31,17 @@ CONTENTS
   matches_index.csv  One row per match, with the slice filters applied
   lake_manifest.json Slice counts and coverage
 
+INCLUDED MATCHES
+{match_note}
+{match_table}
+
+MATCH INDEX
+  matches_index.csv is the complete, machine-readable list: one row per match
+  with match_id, date, format, team1, team2, winner, result, competition,
+  venue, city, season, total_balls, total_runs, total_wickets,
+  wagon_wheel_balls, pitch_line_balls, shot_type_balls, schema_version,
+  gender and level.
+
 NOTES
   * Only clean, published matches are included. Quarantined matches are excluded
     from the public lake.
@@ -72,6 +83,57 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _clip(value: object, width: int) -> str:
+    text = " ".join(str(value or "—").split())
+    return text if len(text) <= width else text[: width - 3].rstrip() + "..."
+
+
+def _team_label(row: dict) -> str:
+    team1 = str(row.get("team1") or "").strip()
+    team2 = str(row.get("team2") or "").strip()
+    if team1 and team2:
+        return f"{team1} vs {team2}"
+    return team1 or team2 or "—"
+
+
+def _venue_label(row: dict) -> str:
+    parts = [str(row.get(key) or "").strip() for key in ("venue", "city")]
+    return ", ".join(part for part in parts if part) or "—"
+
+
+def _readme_matches(rows: list[dict]) -> tuple[str, str]:
+    """A compact match list for the README; the CSV always holds all rows."""
+    if not rows:
+        return "No matches in this slice.", "  (empty)"
+    sample = rows if len(rows) <= 100 else rows[:20] + rows[-20:]
+    if len(rows) <= 100:
+        note = f"All {len(rows):,} {'match' if len(rows) == 1 else 'matches'} in this slice are listed below."
+    else:
+        note = (
+            f"Showing the first and last 20 of {len(rows):,} matches. "
+            "The complete list is matches_index.csv."
+        )
+    widths = (10, 10, 6, 32, 34, 30)
+    headers = ("match_id", "date", "format", "teams", "result", "venue")
+    lines = [
+        "  " + "  ".join(header.ljust(width) for header, width in zip(headers, widths)),
+        "  " + "  ".join("-" * width for width in widths),
+    ]
+    for row in sample:
+        cells = (
+            str(row.get("match_id") or ""),
+            str(row.get("date") or ""),
+            str(row.get("format") or ""),
+            _team_label(row),
+            str(row.get("result") or "—"),
+            _venue_label(row),
+        )
+        lines.append("  " + "  ".join(_clip(cell, width).ljust(width) for cell, width in zip(cells, widths)))
+    if len(rows) > 100:
+        lines.append("  ...")
+    return note, "\n".join(lines)
 
 
 def _slice_manifest(slice_def: dict, rows: list[dict], generated_at: str) -> dict:
@@ -153,6 +215,7 @@ def main() -> int:
             continue
         zip_path = zips_dir / f"{item['id']}.zip"
         manifest = _slice_manifest(item, slice_rows, generated_at)
+        match_note, match_table = _readme_matches(slice_rows)
         readme = README_TEMPLATE.format(
             title=item["title"],
             description=item["description"],
@@ -165,6 +228,8 @@ def main() -> int:
             latest=(manifest["date_range"]["latest"] or "unknown"),
             schemas=json.dumps(manifest["schema_versions"], sort_keys=True),
             generated_at=generated_at,
+            match_note=match_note,
+            match_table=match_table,
         )
         index_path = out / f"{item['id']}.csv"
         with open(index_path, "w", newline="", encoding="utf-8") as f:
