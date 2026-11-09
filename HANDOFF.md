@@ -9,7 +9,7 @@ has its own handoff; do not apply its runbooks, ports or database rules here.
 - Catalog: https://iam-hemanth.github.io/cricket-lake-unfiltered/
 - Calendar: https://iam-hemanth.github.io/cricket-lake-unfiltered/calendar.html
 - **18,381 matches / 3.0 GB** in the master (run 42658234882) and the catalog
-  (run 42662430009). The date range is **2001-12-19 to 2026-11-09**.
+  (run 42665379973). The date range is **2001-12-19 to 2026-11-09**.
 - **1,289 warning-tier** and **230 source-gap-tier** matches are included; their
   caveats are in `meta.validation_warnings` (source-gap files also carry
   `meta.source_gap`). **650 quarantined** remain excluded.
@@ -38,8 +38,11 @@ has its own handoff; do not apply its runbooks, ports or database rules here.
    (sha256 verified, 230 files, all with status + warnings + delta record).
 5. **Consolidate 42658234882**: master **18,381**; quarantined **650**;
    warning **1,289**; source-gap **230**; index carries the status column.
-6. **Catalog 42662430009**: 18,381 records, 197 slices, plus `calendar.html`,
-   `calendar.json` and the `m/` per-match store.
+6. **Catalog 42665379973**: 18,381 records, 197 slices, plus `calendar.html`,
+   `calendar.json` and the 18,381-file `m/` per-match store (275 MB). The
+   preflight now shares the master and deltas as one `source-archives`
+   artifact; 20 shards pulling the 233 MB master from the release CDN
+   concurrently had returned HTTP 500s on random shards.
 
 ## Next steps
 
