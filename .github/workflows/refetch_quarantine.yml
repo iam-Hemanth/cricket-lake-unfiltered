@@ -1,15 +1,18 @@
 name: Re-fetch quarantined matches
 
-# Re-downloads the still-quarantined matches from the source and re-runs the
-# production extractor. This distinguishes two very different cases:
+# Re-downloads the still-quarantined matches from the source in parallel
+# chunks and re-runs the production extractor. This distinguishes two very
+# different cases:
 #   * the original parse was truncated / drifted  -> the new file validates
 #   * the source itself is incomplete             -> the new file still fails
-# Only files that pass the current validator are published as a new
-# matches_batch_refetch_*.tar.gz asset on data-unfiltered-batches.
+#
+# Only files that pass the current validator are published as
+# matches_batch_refetch_<stamp>_c<n>.tar.gz assets on data-unfiltered-batches.
 #
 # The source batch is never edited: matches that still fail stay quarantined
-# in matches_batch_recovery_*.tar.gz, and the failure list is uploaded as a
-# workflow artifact for the next repair pass.
+# in matches_batch_recovery_*.tar.gz. The merge job publishes one
+# refetch-results artifact containing every still-failing file, which
+# apply_source_gap.yml consumes.
 
 on:
   workflow_dispatch:
@@ -19,7 +22,7 @@ on:
         required: true
         default: 'matches_batch_recovery_20261025.tar.gz'
       publish:
-        description: 'Upload the passing refetch batch to data-unfiltered-batches'
+        description: 'Upload the passing refetch batches to data-unfiltered-batches'
         type: boolean
         default: true
       delay:
@@ -38,9 +41,14 @@ env:
   BATCH_TAG: data-unfiltered-batches
 
 jobs:
-  refetch:
+  fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        chunk: [0, 1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
 
@@ -83,7 +91,7 @@ jobs:
               raise SystemExit('no quarantined matches in this batch')
           PY
 
-      - name: Re-fetch and re-extract from source
+      - name: Re-fetch chunk ${{ matrix.chunk }} from source
         env:
           AKAMAI_KEY: ${{ secrets.AKAMAI_KEY }}
         run: |
@@ -91,6 +99,8 @@ jobs:
           mkdir -p refetched raw
           python extract.py \
             --ids-file quarantine_ids.txt \
+            --chunk-index ${{ matrix.chunk }} \
+            --chunk-size 150 \
             --output-dir refetched \
             --raw-dir raw \
             --delay "${{ github.event.inputs.delay }}" \
@@ -110,7 +120,7 @@ jobs:
                   continue
               try:
                   data = json.loads(p.read_text())
-              except Exception as exc:
+              except Exception:
                   reasons['unreadable'] += 1
                   shutil.copy2(p, pathlib.Path('fail') / p.name)
                   failed += 1
@@ -127,27 +137,31 @@ jobs:
               else:
                   shutil.copy2(p, pathlib.Path('pass') / p.name)
                   passed += 1
-          missing = 0
-          summary = {'passed': passed, 'failed': failed, 'missing': missing,
+          summary = {'chunk': ${{ matrix.chunk }}, 'passed': passed, 'failed': failed,
                      'first_error_kinds': dict(reasons.most_common(15))}
-          pathlib.Path('refetch_summary.json').write_text(json.dumps(summary, indent=2))
+          pathlib.Path('refetch_summary_c${{ matrix.chunk }}.json').write_text(json.dumps(summary, indent=2))
           print(json.dumps(summary, indent=2))
-          if passed < 1:
-              raise SystemExit('refetch produced no passing matches')
           PY
 
-      - name: Package passing batch
+      - name: Package passing chunk
         id: package
         run: |
           set -euo pipefail
+          shopt -s nullglob
+          files=(pass/*.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "asset=" >> "$GITHUB_OUTPUT"
+            echo "no passing matches in this chunk"
+            exit 0
+          fi
           stamp="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID}"
-          asset="matches_batch_refetch_${stamp}.tar.gz"
+          asset="matches_batch_refetch_${stamp}_c${{ matrix.chunk }}.tar.gz"
           tar -czf "$asset" -C pass .
           sha256sum "$asset" | tee "${asset}.sha256"
           echo "asset=$asset" >> "$GITHUB_OUTPUT"
 
-      - name: Upload passing batch
-        if: ${{ github.event.inputs.publish == 'true' }}
+      - name: Upload passing chunk
+        if: ${{ github.event.inputs.publish == 'true' && steps.package.outputs.asset != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -157,24 +171,78 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          name: refetch-chunk-${{ matrix.chunk }}
+          path: |
+            refetch_summary_c${{ matrix.chunk }}.json
+            quarantine_ids.txt
+            fail/
+            matches_batch_refetch_*.tar.gz
+            pass/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  merge:
+    needs: fetch
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Collect chunk results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: refetch-chunk-*
+          merge-multiple: true
+          path: chunks
+
+      - name: Merge failure sets and summaries
+        run: |
+          set -euo pipefail
+          mkdir -p fail
+          python - <<'PY'
+          import json, pathlib, shutil
+          root = pathlib.Path('chunks')
+          summaries = []
+          total_pass = total_fail = 0
+          for p in sorted(root.glob('refetch_summary_c*.json')):
+              s = json.loads(p.read_text())
+              summaries.append(s)
+              total_pass += s['passed']
+              total_fail += s['failed']
+          fail_src = root / 'fail'
+          if fail_src.is_dir():
+              for f in fail_src.glob('*.json'):
+                  shutil.copy2(f, pathlib.Path('fail') / f.name)
+          ids = sorted(root.glob('quarantine_ids.txt'))
+          if ids:
+              shutil.copy2(ids[0], 'quarantine_ids.txt')
+          summary = {'passed': total_pass, 'failed': total_fail,
+                     'chunks': summaries,
+                     'merged_fail_files': len(list(pathlib.Path('fail').glob('*.json')))}
+          pathlib.Path('refetch_summary.json').write_text(json.dumps(summary, indent=2))
+          print(json.dumps({k: summary[k] for k in ('passed', 'failed', 'merged_fail_files')}, indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
           name: refetch-results
           path: |
             refetch_summary.json
             quarantine_ids.txt
-            matches_batch_refetch_*.tar.gz
-            matches_batch_refetch_*.tar.gz.sha256
             fail/
-            refetched/failed_matches.json
           if-no-files-found: ignore
           retention-days: 30
 
       - name: Summary
-        if: always()
         run: |
           {
-            echo "### Quarantine re-fetch"
+            echo "### Quarantine re-fetch (parallel)"
             echo '```json'
             cat refetch_summary.json 2>/dev/null || echo '{}'
             echo '```'
-            echo "Passing asset: \`${{ steps.package.outputs.asset }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
