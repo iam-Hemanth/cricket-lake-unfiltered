@@ -203,7 +203,18 @@ jobs:
               echo "$base/data-unfiltered-deltas/$name artifacts/deltas/$name"
             fi
           done < release_assets.txt > downloads.txt
-          cat downloads.txt | xargs -r -n 2 -P 6 sh -c 'curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$2" "$1"' sh
+          fetch() {
+            for attempt in 1 2 3 4 5 6 7 8; do
+              if curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$2" "$1"; then
+                return 0
+              fi
+              echo "retry ${attempt}/8 for $1" >&2
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
+          export -f fetch
+          cat downloads.txt | xargs -r -n 2 -P 4 bash -c 'fetch "$1" "$2"' sh
           test -s artifacts/cricket_lake_unfiltered_master.tar.gz
           echo "downloaded $(find artifacts/deltas -name '*.tar.gz' | wc -l) deltas"
 
@@ -297,7 +308,18 @@ jobs:
               echo "$base/data-unfiltered-deltas/$name artifacts/deltas/$name"
             fi
           done < release_assets.txt > calendar_downloads.txt
-          cat calendar_downloads.txt | xargs -r -n 2 -P 6 sh -c 'curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$2" "$1"' sh
+          fetch() {
+            for attempt in 1 2 3 4 5 6 7 8; do
+              if curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$2" "$1"; then
+                return 0
+              fi
+              echo "retry ${attempt}/8 for $1" >&2
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
+          export -f fetch
+          cat calendar_downloads.txt | xargs -r -n 2 -P 4 bash -c 'fetch "$1" "$2"' sh
           test -s artifacts/cricket_lake_unfiltered_master.tar.gz
 
       - name: Build catalog
