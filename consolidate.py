@@ -18,8 +18,23 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from src.validator import validate_match_data, count_team_wickets, validate_inventory_candidate
+from src.validator import validate_match_data, count_team_wickets, validate_inventory_candidate, NON_DISMISSAL_KINDS
 from src.source_facts import source_only_timed_out
+
+
+def _wicket_count(deliveries, allow_unknown: bool = False) -> int:
+    """Count dismissal events; source-gap files may carry an unknown label."""
+    try:
+        return count_team_wickets(deliveries)
+    except ValueError:
+        if not allow_unknown:
+            raise
+        return sum(
+            1
+            for delivery in deliveries
+            for wicket in delivery.get("wickets") or []
+            if str(wicket.get("kind") or "").strip().lower() not in NON_DISMISSAL_KINDS
+        )
 
 logging.basicConfig(
     level=logging.INFO,
@@ -84,6 +99,8 @@ def scan_and_consolidate(
     legacy_unverified_matches = 0
     source_only_timed_out_wickets = 0
     quarantined_matches = 0
+    warning_matches = 0
+    source_gap_matches = 0
     invalid_matches = 0
 
     processed_mids: List[str] = []
@@ -99,26 +116,35 @@ def scan_and_consolidate(
 
         # Quarantined matches were already assessed and deliberately retained;
         # re-validating here would silently drop them a second time.
-        is_quarantined = (data.get("meta") or {}).get("validation_status") == "failed"
+        status = (data.get("meta") or {}).get("validation_status")
+        is_quarantined = status == "failed"
         if is_quarantined:
             quarantined_matches += 1
             # The public catalog rejects quarantined files, so a published-only
             # manifest must not count them (or their balls/runs) either.
             if published_only:
                 continue
-        validation_errors = [] if is_quarantined else validate_inventory_candidate(data)
+        # Source-gap records were admitted by the repair policy with their
+        # warning list intact. They intentionally fail the strict validator;
+        # the status is the audit trail, not a silent pass.
+        is_source_gap = status == "source_gap"
+        validation_errors = [] if (is_quarantined or is_source_gap) else validate_inventory_candidate(data)
         if validation_errors:
             invalid_matches += 1
             failed_matches_all[mid] = "; ".join(validation_errors[:5])
             logger.warning("Rejected candidate %s: %s",mid,failed_matches_all[mid])
             continue
+        if status == "warning":
+            warning_matches += 1
+        elif is_source_gap:
+            source_gap_matches += 1
         meta=data['meta']
         if meta.get('schema_version')=='3.0.0':legacy_unverified_matches+=1
         try:
-            match_wicket_count = count_team_wickets([
+            match_wicket_count = _wicket_count([
                 d for inn in data.get("innings") or [] for ov in inn.get("overs") or []
                 for d in ov.get("deliveries") or []
-            ])
+            ], allow_unknown=is_source_gap)
         except ValueError as exc:
             failed_matches_all[mid] = str(exc)
             continue
@@ -228,6 +254,8 @@ def scan_and_consolidate(
             "publication_mode": "published_only" if published_only else "include_quarantined",
             "quarantined_matches": quarantined_matches,
             "quarantined_published": 0 if published_only else quarantined_matches,
+            "warning_matches": warning_matches,
+            "source_gap_matches": source_gap_matches,
             "invalid_matches": invalid_matches,
             "zero_delivery_matches": zero_delivery_matches,
             "legacy_unverified_matches":legacy_unverified_matches,

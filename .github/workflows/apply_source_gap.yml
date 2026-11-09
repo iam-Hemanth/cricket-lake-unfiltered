@@ -1,0 +1,136 @@
+name: Admit source-gap matches
+
+# Takes the still-failing files produced by a refetch_quarantine run and
+# admits the narrow source-disagreement tier: complete ball-by-ball, but the
+# scorecard and the delivery stream differ by at most 2 legal balls, 2 runs or
+# 1 wicket, with no structural, running-total or penalty error.
+#
+# Admitted files keep validation_status="source_gap", the exact warning list,
+# and a meta.source_gap delta record. Nothing is backfilled.
+#
+# The batch is named matches_batch_sourcegap_* so it unpacks after the
+# recovery/refetch batches in consolidate_full_lake.yml (lexicographic order)
+# and therefore wins for the same match id.
+
+on:
+  workflow_dispatch:
+    inputs:
+      refetch_run_id:
+        description: 'Run id of the completed refetch_quarantine workflow'
+        required: true
+      publish:
+        description: 'Upload the source-gap batch to data-unfiltered-batches'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: source-gap-policy
+  cancel-in-progress: false
+
+env:
+  BATCH_TAG: data-unfiltered-batches
+
+jobs:
+  admit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download refetch failures
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh run download "${{ github.event.inputs.refetch_run_id }}" \
+            -n refetch-results --dir refetch_out
+          echo "failure files: $(find refetch_out/fail -name '*.json' | wc -l)"
+
+      - name: Apply the source-gap policy
+        run: |
+          set -euo pipefail
+          python scripts/apply_source_gap_policy.py \
+            --input-dir refetch_out/fail \
+            --out-dir gap \
+            --summary gap_summary.json
+
+      - name: Guard the admitted count
+        run: |
+          set -euo pipefail
+          count=$(python3 -c "import json; print(json.load(open('gap_summary.json'))['admitted'])")
+          echo "admitted=${count}"
+          if [ "$count" -lt 1 ] || [ "$count" -gt 880 ]; then
+            echo "::error::Unexpected admitted count: ${count}"
+            exit 1
+          fi
+
+      - name: Verify admitted files carry their caveats
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, pathlib, sys
+          files = sorted(pathlib.Path('gap').glob('*.json'))
+          bad = []
+          for p in files:
+              data = json.loads(p.read_text())
+              meta = data.get('meta') or {}
+              if meta.get('validation_status') != 'source_gap':
+                  bad.append((p.name, 'status'))
+              elif not meta.get('validation_warnings'):
+                  bad.append((p.name, 'no warnings'))
+              elif not meta.get('source_gap'):
+                  bad.append((p.name, 'no delta record'))
+          print(f'{len(files)} source-gap files checked; {len(bad)} bad')
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: Package source-gap batch
+        id: package
+        run: |
+          set -euo pipefail
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID}"
+          asset="matches_batch_sourcegap_${stamp}.tar.gz"
+          tar -czf "$asset" -C gap .
+          sha256sum "$asset" | tee "${asset}.sha256"
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+
+      - name: Upload source-gap batch
+        if: ${{ github.event.inputs.publish == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "$BATCH_TAG" "${{ steps.package.outputs.asset }}" --clobber
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sourcegap-batch
+          path: |
+            gap_summary.json
+            matches_batch_sourcegap_*.tar.gz
+            matches_batch_sourcegap_*.tar.gz.sha256
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Source-gap admission"
+            echo '```json'
+            python3 -c "import json; d=json.load(open('gap_summary.json')); d.pop('admitted_ids', None); print(json.dumps(d, indent=2))" 2>/dev/null || echo '{}'
+            echo '```'
+            echo "Asset: \`${{ steps.package.outputs.asset }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

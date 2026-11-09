@@ -98,6 +98,8 @@ def main() -> int:
         "genders": meta.get("genders", {}),
         "date_range": meta.get("date_range", {}),
         "excluded_quarantined": meta.get("excluded_quarantined"),
+        "warning_matches": meta.get("warning_matches"),
+        "source_gap_matches": meta.get("source_gap_matches"),
         "notes": meta.get("notes", []),
         "groups": groups,
     }

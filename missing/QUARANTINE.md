@@ -99,34 +99,29 @@ belong with G/H until those are repaired.
 
 ## The 880 that still fail after the warn tier
 
-This grouping comes from the current validator (stored error lists were often
-truncated). Each match is counted once by its first blocker; single-cause is
-the count whose only failure is that blocker.
+Re-run of the current validator over the recovery batch (09 Nov 2026). The
+earlier primary-cause table is kept conceptually but is superseded by this
+measurement: a match usually fails several checks, so grouping by "first"
+blocker hid how small the underlying gap is.
 
-| Primary blocker | Matches | Single-cause | Next repair |
-| --- | ---: | ---: | --- |
-| Missing deliveries | 28 | 0 | Re-fetch the innings; no offline repair |
-| Unknown dismissal | 15 | 9 | Map `dismissalType` from the scorecard/commentary |
-| Penalty component review | 177 | 0 | Apply only a scorecard-proven penalty adjustment |
-| Over / legal-ball grouping | 245 | 6 | Re-bucket deliveries by source markers |
-| Scorecard wickets | 178 | 74 | Verify non-delivery dismissals and wicket attribution |
-| Scorecard runs | 91 | 0 | Separate penalty/parse errors from commentary defects |
-| Source legal-ball coverage | 108 | 72 | Recompute legal balls; check wides/no-balls |
-| Source exact runs | 19 | 12 | Recompute runs; check penalties and byes |
-| Extras breakdown | 18 | 18 | Recompute wides/no-balls/byes/legbyes |
-| Sequence / marker | 1 | 0 | Manual review |
+| Measured shape | Matches | What it means |
+| --- | ---: | --- |
+| 1 root cause only | **196** | 74 wickets, 72 legal balls, 18 extras, 16 runs, 9 unknown dismissals, 6 over boundaries, 1 sequence |
+| All deltas small | **270** | every innings within 2 legal balls / 2 runs / 1 wicket; no structural or running-score error |
+| Large source gap | **610** | at least one innings short by 3+ balls or 3+ runs; includes the 28 incomplete innings and 1 non-monotonic sequence |
 
-Some causes overlap heavily: 721 matches have a source legal-ball coverage
-failure, 646 a source exact-runs failure, 533 a scorecard-runs failure, 493 a
-scorecard-wickets failure, 387 a remaining running-score failure, 371 an over
-grouping failure, 199 extras and 179 penalties. The **191 single-cause matches**
-(74 wickets, 72 legal coverage, 18 extras, 12 exact runs, 9 dismissals, 6 over)
-are the cheapest next tranche because only one check has to be repaired.
+Overlapping totals: 721 matches fail source legal-ball coverage, 646 source
+exact runs, 533 scorecard runs (>2), 493 scorecard wickets, 371 over grouping,
+199 extras, 179 penalty-component review. Those are check counts, not match
+causes — the 270 small-delta matches are the only ones that can be considered
+for admission without new source data. The 610 large-gap matches need a
+re-fetch; an offline waiver would hide missing overs.
 
-The deep multi-cause signatures — for example
-`over+scorecard_runs+scorecard_wkts+source_legal+source_runs` — are the least
-likely to recover and should be the flagged tier if the targeted pass does not
-close them.
+The 196 single-root matches are the cheapest tranche: 74 have exactly one
+missing scorecard wicket, 72 are one legal ball out, 18 disagree only in the
+extras split (final runs reconcile), 16 differ by 1–2 final runs, 9 carry an
+`unknown` dismissal label, and 6 have a shifted over boundary (e.g. 3+9 legal
+balls across two overs).
 
 ## Latest window is also missing 9 matches
 
@@ -163,19 +158,21 @@ v1 policy regardless.
    `missing_non_striker_deliveries`, and do not turn the absence into a hard
    `identity_issue`. This is already tolerated in the clean corpus (4,607
    deliveries), so it is a consistency fix, not a new allowance.
-3. **Penalty and grouping audit (next ~150–250).** Recompute the 87
-   `needs_review` penalties and the 281 impossible-over cases against the
-   scorecard. Penalty runs (5 runs, no delivery) explain a meaningful share of
-   the exact-runs and extras mismatches. Verify each against the source before
-   changing an adjustment.
-4. **Targeted re-fetch for the rest.** Generate a work queue with match id,
-   competition, computed vs scorecard totals and error text; re-extract the 28
-   incomplete innings and the scorecard mismatches, then revalidate. Do not
-   backfill by hand.
-5. **Optional flagged tier.** If the residual defects cannot be repaired,
-   publish a clearly labelled opt-in group (not mixed into clean slices) with
-   `validation_status` and `validation_errors` intact. This is the only honest
-   way to expose all 2,169; it does not make them clean.
+3. **Re-fetch the 880 (in progress).** `refetch_quarantine.yml` re-downloads
+   every still-quarantined id with the production extractor, publishes only the
+   files that validate cleanly as `matches_batch_refetch_*.tar.gz`, and leaves
+   the rest in quarantine with a failure artifact. This is the only honest fix
+   for the 610 large-gap matches; it may also close some of the 270 small-delta
+   matches without a policy change.
+4. **Decide the small-delta tier from the re-fetch evidence.** If a match still
+   fails with all deltas within 2 legal balls / 2 runs / 1 wicket and no
+   structural or running-score error, it is a source disagreement, not missing
+   data. Admit it only with `validation_status` plus the explicit warning list,
+   and label the count in the slice READMEs — never in the clean tier silently.
+5. **Leave the large-gap residual quarantined.** 610 matches with missing overs
+   or innings cannot be repaired by a waiver. Re-fetch first; if the source
+   still lacks the deliveries, keep them in the recovery batch and list them in
+   the audit rather than publishing partial games as if complete.
 
 ## Rebuild and verification
 

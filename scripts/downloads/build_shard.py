@@ -25,6 +25,7 @@ Matches       : {count}
 Date range    : {earliest} to {latest}
 Schema mix    : {schemas}
 Gender mix    : {genders}
+Validation    : {validation}
 Generated at  : {generated_at}
 
 CONTENTS
@@ -44,8 +45,8 @@ MATCH INDEX
   gender and level.
 
 NOTES
-  * Only clean, published matches are included. Quarantined matches are excluded
-    from the public lake.
+  * Quarantined matches are excluded from the public lake.
+{validation_note}
   * Played windows use the first date in meta.dates (the start date for
     multi-day matches). Added windows use the date a match entered the lake.
   * The original 16.4k backfill predates the incremental feed, so older matches
@@ -143,6 +144,7 @@ def _slice_manifest(slice_def: dict, rows: list[dict], generated_at: str) -> dic
     formats = Counter(row.get("format_family") or "Other" for row in rows)
     levels = Counter(row.get("level") or "unknown" for row in rows)
     genders = Counter(row.get("gender") or "unknown" for row in rows)
+    statuses = Counter(row.get("validation_status") or "clean" for row in rows)
     dates = sorted({row["date"] for row in rows if row.get("date") and row["date"] != "Unknown"})
     return {
         "dataset": "cricket-lake-v3",
@@ -160,6 +162,11 @@ def _slice_manifest(slice_def: dict, rows: list[dict], generated_at: str) -> dic
         "formats": dict(formats),
         "levels": dict(levels),
         "genders": dict(genders),
+        "validation": {
+            "statuses": dict(statuses),
+            "warning_matches": statuses.get("warning", 0),
+            "source_gap_matches": statuses.get("source_gap", 0),
+        },
         "totals": {
             "deliveries": sum(int(row.get("total_balls") or 0) for row in rows),
             "runs": sum(int(row.get("total_runs") or 0) for row in rows),
@@ -167,7 +174,9 @@ def _slice_manifest(slice_def: dict, rows: list[dict], generated_at: str) -> dic
         },
         "coverage": {
             "quarantined_excluded": True,
-            "note": "Public lake excludes quarantined matches.",
+            "warning_matches": statuses.get("warning", 0),
+            "source_gap_matches": statuses.get("source_gap", 0),
+            "note": "Quarantined matches are excluded; warning/source-gap records carry their caveats in meta.validation_warnings.",
         },
     }
 
@@ -218,6 +227,20 @@ def main() -> int:
         zip_path = zips_dir / f"{item['id']}.zip"
         manifest = _slice_manifest(item, slice_rows, generated_at)
         match_note, match_table = _readme_matches(slice_rows)
+        statuses = manifest["validation"]["statuses"]
+        validation_label = " · ".join(
+            f"{name} {count:,}" for name, count in sorted(statuses.items())
+        ) or "clean"
+        flagged = manifest["validation"]["warning_matches"] + manifest["validation"]["source_gap_matches"]
+        if flagged:
+            validation_note = (
+                f"  * {manifest['validation']['warning_matches']:,} warning-tier and "
+                f"{manifest['validation']['source_gap_matches']:,} source-gap matches carry "
+                "recorded caveats in meta.validation_warnings; their scorecard and "
+                "ball-by-ball totals differ as described there."
+            )
+        else:
+            validation_note = "  * All matches in this slice pass the structural validator."
         readme = README_TEMPLATE.format(
             title=item["title"],
             description=item["description"],
@@ -230,6 +253,8 @@ def main() -> int:
             latest=(manifest["date_range"]["latest"] or "unknown"),
             schemas=json.dumps(manifest["schema_versions"], sort_keys=True),
             genders=json.dumps(manifest["genders"], sort_keys=True),
+            validation=validation_label,
+            validation_note=validation_note,
             generated_at=generated_at,
             match_note=match_note,
             match_table=match_table,
@@ -267,6 +292,7 @@ def main() -> int:
             "formats": manifest["formats"],
             "levels": manifest["levels"],
             "genders": manifest["genders"],
+            "validation": manifest["validation"],
             "generated_at": generated_at,
         })
         print(f"built {item['id']}: {len(present)} matches, {size / 1024 / 1024:.2f} MB")

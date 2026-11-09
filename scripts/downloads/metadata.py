@@ -24,7 +24,7 @@ EXPORT_FIELDS = [
     "record_stats_eligible", "gender", "competition", "season", "team1", "team2",
     "winner", "result", "toss_winner", "toss_decision", "venue", "city",
     "venue_country", "total_balls", "total_runs", "total_wickets",
-    "wagon_wheel_balls", "pitch_line_balls", "shot_type_balls",
+    "wagon_wheel_balls", "pitch_line_balls", "shot_type_balls", "validation_status",
     "level", "format_family", "year", "competition_id", "competition_name",
     "competition_type", "team_ids", "published_at",
 ]
@@ -250,6 +250,7 @@ def record_from_match_json(match_id: str, path: Path) -> dict:
         "international_status": meta.get("international_status") or "unknown",
         "classification_status": meta.get("classification_status") or "legacy_unverified",
         "record_stats_eligible": meta.get("record_stats_eligible"),
+        "validation_status": meta.get("validation_status") or "clean",
         "gender": meta.get("gender") or "unknown",
         "competition": meta.get("competition") or "",
         "season": str(meta.get("season") or ""),

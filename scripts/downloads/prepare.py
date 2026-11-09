@@ -94,6 +94,24 @@ def main() -> int:
     (out_dir / "shards.json").write_text(json.dumps(shards, indent=2), encoding="utf-8")
 
     manifest = load_json(Path(args.master_manifest), {}) if args.master_manifest else {}
+    coverage = manifest.get("coverage") or {}
+    warned = coverage.get("warning_matches") or 0
+    source_gap = coverage.get("source_gap_matches") or 0
+    quarantined = coverage.get("quarantined_matches")
+    validation_notes = []
+    if warned:
+        validation_notes.append(
+            f"{warned} published matches carry recorded source warnings "
+            "(meta.validation_status = warning); their warning lists are in the JSON."
+        )
+    if source_gap:
+        validation_notes.append(
+            f"{source_gap} published matches are flagged source-gap records "
+            "(meta.validation_status = source_gap): source totals and ball-by-ball "
+            "differ by a small, disclosed amount."
+        )
+    if quarantined:
+        validation_notes.append(f"{quarantined} quarantined matches remain excluded.")
     schema_versions = Counter(r.get("schema_version") or "unknown" for r in ordered)
     formats = Counter(r.get("format_family") or "Other" for r in ordered)
     levels = Counter(r.get("level") or "unknown" for r in ordered)
@@ -110,13 +128,15 @@ def main() -> int:
         "levels": dict(levels),
         "genders": dict(genders),
         "date_range": {"earliest": dates[0] if dates else None, "latest": dates[-1] if dates else None},
-        "excluded_quarantined": ((manifest.get("coverage") or {}).get("quarantined_matches")),
+        "excluded_quarantined": quarantined,
+        "warning_matches": warned,
+        "source_gap_matches": source_gap,
         "slice_count": len(slices),
         "shard_count": len(shards),
         "group_order": GROUP_ORDER,
         "group_descriptions": GROUP_DESCRIPTIONS,
         "notes": [
-            "Only clean, published matches are included. Quarantined matches remain excluded.",
+            *validation_notes,
             "Men-only slices are listed separately; all-match slices include the small women's set.",
             "All-match slices include the small women's set; women's-only slices are withheld for v1 until the T2 backfill is run.",
             "Added windows cover matches first published by the delta/recovery pipeline; the original 16.4k backfill predates this feed.",

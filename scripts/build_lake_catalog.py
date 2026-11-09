@@ -13,10 +13,24 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from src.validator import count_team_wickets, validate_match_data, validate_inventory_candidate
+from src.validator import count_team_wickets, validate_match_data, validate_inventory_candidate, NON_DISMISSAL_KINDS
 from src.source_facts import source_only_timed_out
 
-CATALOG_FIELDS=['filename', 'match_id', 'date', 'format', 'format_bucket', 'schema_version', 'record_class', 'playing_format', 'international_status', 'classification_status', 'record_stats_eligible', 'gender', 'competition', 'season', 'team1', 'team2', 'winner', 'result', 'toss_winner', 'toss_decision', 'venue', 'city', 'venue_country', 'total_balls', 'total_runs', 'total_wickets', 'wagon_wheel_balls', 'pitch_line_balls', 'shot_type_balls']
+
+def _wicket_count(deliveries, allow_unknown: bool = False) -> int:
+    try:
+        return count_team_wickets(deliveries)
+    except ValueError:
+        if not allow_unknown:
+            raise
+        return sum(
+            1
+            for delivery in deliveries
+            for wicket in delivery.get("wickets") or []
+            if str(wicket.get("kind") or "").strip().lower() not in NON_DISMISSAL_KINDS
+        )
+
+CATALOG_FIELDS=['filename', 'match_id', 'date', 'format', 'format_bucket', 'schema_version', 'record_class', 'playing_format', 'international_status', 'classification_status', 'record_stats_eligible', 'validation_status', 'gender', 'competition', 'season', 'team1', 'team2', 'winner', 'result', 'toss_winner', 'toss_decision', 'venue', 'city', 'venue_country', 'total_balls', 'total_runs', 'total_wickets', 'wagon_wheel_balls', 'pitch_line_balls', 'shot_type_balls']
 
 
 
@@ -38,10 +52,13 @@ def generate_catalog(matches_dir: Path, output_dir: Path, archive_prefix: str = 
             print(f"Error loading {p.name}: {e}")
             continue
 
-        errors=validate_inventory_candidate(d)
-        if errors:
-            print(f'Rejected catalog candidate {p.stem}: {errors[0]}')
-            continue
+        status = (d.get("meta") or {}).get("validation_status")
+        is_source_gap = status == "source_gap"
+        if not is_source_gap:
+            errors=validate_inventory_candidate(d)
+            if errors:
+                print(f'Rejected catalog candidate {p.stem}: {errors[0]}')
+                continue
         mid = str(d.get("match_id") or p.stem)
         meta = d.get("meta") or {}
         dates = meta.get("dates") or []
@@ -96,7 +113,7 @@ def generate_catalog(matches_dir: Path, output_dir: Path, archive_prefix: str = 
         for inn in inns:
             total_runs += inn.get('innings_penalty_runs',0)
             deliveries=[b for ov in inn.get('overs') or [] for b in ov.get('deliveries') or []]
-            total_wkts += count_team_wickets(deliveries)+source_only_timed_out(deliveries,inn.get('source_scorecard') or {})
+            total_wkts += _wicket_count(deliveries, allow_unknown=is_source_gap)+source_only_timed_out(deliveries,inn.get('source_scorecard') or {})
             for ov in (inn.get("overs") or []):
                 for b in (ov.get("deliveries") or []):
                     total_balls += 1
@@ -122,6 +139,7 @@ def generate_catalog(matches_dir: Path, output_dir: Path, archive_prefix: str = 
             "international_status":meta.get('international_status') or 'unknown',
             "classification_status":meta.get('classification_status') or 'legacy_unverified',
             "record_stats_eligible":meta.get('record_stats_eligible'),
+            "validation_status":meta.get('validation_status') or 'clean',
             "gender":meta.get('gender') or 'unknown',
             "competition": comp,
             "season": season,

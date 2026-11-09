@@ -835,13 +835,20 @@ function render(data) {
   $("schema").textContent = JSON.stringify(data.schema_versions || {});
 
   const quarantined = data.excluded_quarantined;
+  const warned = data.warning_matches || 0;
+  const gap = data.source_gap_matches || 0;
   const female = (data.genders && data.genders.female) || 0;
+  const flagNote = (warned || gap)
+    ? ` ${fmt.format(warned)} warning-tier${gap ? ` and ${fmt.format(gap)} source-gap` : ""} matches are included with their recorded caveats.`
+    : "";
   $("mon-note").textContent =
-    `Only clean, published matches are included${quarantined ? ` (${fmt.format(quarantined)} quarantined excluded)` : ""}. ` +
-    "Added windows cover the incremental/recovery feed since 24 Oct 2026." +
+    `Published matches are structurally complete.${flagNote}` +
+    (quarantined ? ` ${fmt.format(quarantined)} quarantined matches remain excluded.` : "") +
+    " Added windows cover the incremental/recovery feed since 24 Oct 2026." +
     (female ? ` All-match slices include ${fmt.format(female)} women's matches; women's-only slices are withheld for v1 pending the T2 backfill.` : "");
   $("coverage").textContent =
     `Published lake: ${fmt.format(data.total_matches || 0)} matches; ${fmt.format(data.slice_count || 0)} slices; ${data.total_size_label || ""}. ` +
+    (warned || gap ? `${fmt.format(warned)} warning-tier / ${fmt.format(gap)} source-gap recorded. ` : "") +
     `Date range ${range.earliest || "—"} to ${range.latest || "—"}.`;
 
   const groups = data.groups || [];
