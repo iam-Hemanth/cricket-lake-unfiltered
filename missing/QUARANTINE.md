@@ -97,6 +97,37 @@ belong with G/H until those are repaired.
    `matches_index.csv` row count and each slice's manifest before/after.
 
 
+## The 880 that still fail after the warn tier
+
+This grouping comes from the current validator (stored error lists were often
+truncated). Each match is counted once by its first blocker; single-cause is
+the count whose only failure is that blocker.
+
+| Primary blocker | Matches | Single-cause | Next repair |
+| --- | ---: | ---: | --- |
+| Missing deliveries | 28 | 0 | Re-fetch the innings; no offline repair |
+| Unknown dismissal | 15 | 9 | Map `dismissalType` from the scorecard/commentary |
+| Penalty component review | 177 | 0 | Apply only a scorecard-proven penalty adjustment |
+| Over / legal-ball grouping | 245 | 6 | Re-bucket deliveries by source markers |
+| Scorecard wickets | 178 | 74 | Verify non-delivery dismissals and wicket attribution |
+| Scorecard runs | 91 | 0 | Separate penalty/parse errors from commentary defects |
+| Source legal-ball coverage | 108 | 72 | Recompute legal balls; check wides/no-balls |
+| Source exact runs | 19 | 12 | Recompute runs; check penalties and byes |
+| Extras breakdown | 18 | 18 | Recompute wides/no-balls/byes/legbyes |
+| Sequence / marker | 1 | 0 | Manual review |
+
+Some causes overlap heavily: 721 matches have a source legal-ball coverage
+failure, 646 a source exact-runs failure, 533 a scorecard-runs failure, 493 a
+scorecard-wickets failure, 387 a remaining running-score failure, 371 an over
+grouping failure, 199 extras and 179 penalties. The **191 single-cause matches**
+(74 wickets, 72 legal coverage, 18 extras, 12 exact runs, 9 dismissals, 6 over)
+are the cheapest next tranche because only one check has to be repaired.
+
+The deep multi-cause signatures — for example
+`over+scorecard_runs+scorecard_wkts+source_legal+source_runs` — are the least
+likely to recover and should be the flagged tier if the targeted pass does not
+close them.
+
 ## Latest window is also missing 9 matches
 
 The 2026-11-09 05:01 UTC `Update lake (6-hourly)` run discovered 9 matches and
