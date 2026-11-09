@@ -189,14 +189,33 @@ def validate_innings(
                 f"Inn {inn.get('innings_number')} Over {ov.get('over')} has {legal_count} legal balls (expected {balls_per_over})"
             )
 
-    # 2. Cumulative score integrity vs Cricinfo totalInningRuns
+    # 2. Cumulative score integrity vs Cricinfo totalInningRuns.
+    # The commentary running total is advisory when the final scorecard total
+    # reconciles exactly: the delivery stream and the scorecard agree, and the
+    # per-ball total is the outlier. Keep the check strict when there is no
+    # scorecard total or the final totals disagree.
     calc_runs = 0
+    scorecard_source = sc_inn or inn.get("source_scorecard")
+    final_runs = (
+        sum(d.get("runs", {}).get("total", 0) for ov in overs for d in ov.get("deliveries", []))
+        + inn.get("innings_penalty_runs", 0)
+    )
+    commentary_drift_allowed = (
+        scorecard_source is not None
+        and scorecard_source.get("runs") is not None
+        and final_runs == scorecard_source.get("runs")
+    )
     for ov in overs:
         for d in ov.get("deliveries") or []:
             calc_runs += d.get("runs", {}).get("total", 0)
             cricinfo_total = d.get("total_inning_runs")
             # Tolerate isolated 0-resets or minor single-ball typos if within 2 runs
-            if cricinfo_total is not None and cricinfo_total > 0 and abs(calc_runs - cricinfo_total) > 2:
+            if (
+                not commentary_drift_allowed
+                and cricinfo_total is not None
+                and cricinfo_total > 0
+                and abs(calc_runs - cricinfo_total) > 2
+            ):
                 errors.append(
                     f"Running score mismatch at Ball {d.get('actual_delivery')}: "
                     f"calculated {calc_runs} != Cricinfo {cricinfo_total}"
@@ -275,6 +294,14 @@ def validate_player_registry(match_data: dict) -> Tuple[bool, List[str]]:
             if player.get("player_id") != pid or pid != f"espn_{player.get('espn_id')}":
                 errors.append(f"Invalid canonical participant identity {pid}")
         for issue in (match_data.get("meta") or {}).get("identity_issues") or []:
+            # A missing non-striker id is an optional-field gap, already counted
+            # in meta.missing_non_striker_deliveries; it is not a hard failure.
+            if (
+                isinstance(issue, dict)
+                and issue.get("reason") == "missing_object_id"
+                and issue.get("field") == "non_striker_id"
+            ):
+                continue
             errors.append(f"Participant identity issue: {issue}")
         for inn in match_data.get("innings") or []:
             for ov in inn.get("overs") or []:

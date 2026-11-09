@@ -63,7 +63,7 @@ error list contains only that cause.
 | Group | Matches | Single-cause | Why it is withheld | Best way to allow |
 | --- | ---: | ---: | --- | --- |
 | A. Commentary running total only | 1,273 | 1,273 | The per-ball `total_inning_runs` disagrees mid-innings, but every innings' final total equals the scorecard; all other checks pass | Admit with a warning; keep the source field, add `validation_warnings` |
-| B. Missing non-striker id only | 76 | 76 | `identity_issues` records a missing `non_striker_id` | Null the field, count it in `missing_non_striker_deliveries`, as already done for 4,607 clean deliveries |
+| B. Missing non-striker id only | 76 | 76 | `identity_issues` records a missing `non_striker_id`; a fresh revalidation also finds over/legal-ball defects in these files | Null the field and count it; repair the over grouping before admitting (they fall into G/H) |
 | C. Commentary + non-striker id | 1 | 0 | Both A and B | Same two fixes |
 | D. Missing deliveries | 28 | 0 | A scorecard innings with runs/wickets has no or too few deliveries | Re-fetch the innings; not repairable from the parsed archive |
 | E. Unknown dismissal | 15 | 8 | `dismissalType=unknown` is not in the map | Map from the scorecard/commentary, then revalidate |
@@ -72,9 +72,11 @@ error list contains only that cause.
 | H. Scorecard totals / coverage | 428 | 79 | Runs, wickets, legal balls or extras disagree with the scorecard | Separate penalty/parse errors from genuine commentary defects; repair or leave flagged |
 | I. Sequence / marker | 16 | 15 | Non-monotonic sequence or an uncorroborated delivery marker | Manual review against the source |
 
-The safe first tier is **A + B + C = 1,350 matches**: all are scorecard-consistent,
-and the only disagreement is an advisory commentary field or a missing
-non-striker id. The remaining **819** are D–I.
+The recorded error lists were often truncated, so the authoritative test is a
+fresh run of the current validator. That run admits **1,289 matches (A 1,288 +
+C 1)** and leaves **880** quarantined. The 76 "identity-only" matches also fail
+over/legal-ball checks that were absent from their stored error lists, so they
+belong with G/H until those are repaired.
 
 ## Recommended publication policy
 
@@ -123,9 +125,9 @@ v1 policy regardless.
    `src/validator.py`, demote the cumulative `total_inning_runs` comparison to a
    warning when the innings' final runs, wickets, legal balls and extras all
    reconcile. Annotate `meta.validation_warnings`; do not rewrite the source
-   field. A simulation over the archive (drop running-score errors only when
-   every innings' final total equals its scorecard, drop non-striker-only
-   identity errors) passes **1,350 matches** and leaves **819** quarantined.
+   field. A fresh run of the modified validator over the archive admits
+   **1,289 matches** and leaves **880** quarantined. The stored error lists are
+   not a reliable admission test.
 2. **Normalise missing non-striker ids.** Leave `non_striker_id` null, increment
    `missing_non_striker_deliveries`, and do not turn the absence into a hard
    `identity_issue`. This is already tolerated in the clean corpus (4,607
@@ -152,6 +154,6 @@ v1 policy regardless.
   `coverage.quarantined_matches` before/after.
 - Rebuild the master, then the catalog; verify the new ids appear in
   `matches_index.csv` and that each slice's manifest count adds up.
-- Expected receipts: quarantined 2,169 → **819** (simulated after steps 1–2),
-  and the clean lake 16,856 → **18,206**. Do not claim these until the rerun
-  reports them.
+- Expected receipts: quarantined 2,169 → **880** (current validator after the
+  warning policy), and the clean lake 16,856 → **18,145**. Do not claim these
+  until the rerun reports them.

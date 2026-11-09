@@ -1,0 +1,119 @@
+name: Repair quarantined matches (warn tier)
+
+# Downloads a quarantined batch, revalidates it with the warn-tier policy
+# (commentary running-total drift when the scorecard reconciles; missing
+# non-striker ids), and publishes the admitted matches as a new
+# matches_batch_warned_*.tar.gz asset on data-unfiltered-batches.
+#
+# This workflow never edits the source batch. The original validation errors
+# are preserved in meta.validation_warnings on every admitted match.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_asset:
+        description: 'Batch asset containing the quarantined matches'
+        required: true
+        default: 'matches_batch_recovery_20261025.tar.gz'
+      publish:
+        description: 'Upload the warned batch to data-unfiltered-batches'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-quarantine
+  cancel-in-progress: false
+
+env:
+  BATCH_TAG: data-unfiltered-batches
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download source batch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p recovered/matches
+          gh release download "$BATCH_TAG" \
+            -p "${{ github.event.inputs.source_asset }}" \
+            --dir recovered --clobber
+          tar -xzf "recovered/${{ github.event.inputs.source_asset }}" -C recovered/matches
+          echo "source files: $(find recovered/matches -name '*.json' | wc -l)"
+
+      - name: Revalidate under the warn-tier policy
+        run: |
+          set -euo pipefail
+          python scripts/apply_warn_policy.py \
+            --input-dir recovered/matches \
+            --out-dir warned \
+            --summary warned_summary.json
+
+      - name: Guard the admitted count
+        run: |
+          set -euo pipefail
+          count=$(python3 -c "import json; print(json.load(open('warned_summary.json'))['admitted'])")
+          failed=$(python3 -c "import json; print(json.load(open('warned_summary.json'))['still_failed'])")
+          echo "admitted=${count}; still failed=${failed}"
+          if [ "$count" -lt 1 ] || [ "$count" -gt 2000 ]; then
+            echo "::error::Unexpected admitted count: ${count}"
+            exit 1
+          fi
+
+      - name: Verify every admitted file passes the validator
+        run: |
+          set -euo pipefail
+          python -c "import json, pathlib, sys; from src.validator import validate_match_data; files=sorted(pathlib.Path('warned').glob('*.json')); bad=[p.name for p in files if validate_match_data(json.loads(p.read_text()))]; print(f'{len(files)} warned files checked; {len(bad)} failing'); sys.exit(1 if bad else 0)"
+
+      - name: Package warned batch
+        id: package
+        run: |
+          set -euo pipefail
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID}"
+          asset="matches_batch_warned_${stamp}.tar.gz"
+          tar -czf "$asset" -C warned .
+          sha256sum "$asset" | tee "${asset}.sha256"
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+
+      - name: Upload warned batch
+        if: ${{ github.event.inputs.publish == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "$BATCH_TAG" "${{ steps.package.outputs.asset }}" --clobber
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: warned-batch
+          path: |
+            ${{ steps.package.outputs.asset }}
+            ${{ steps.package.outputs.asset }}.sha256
+            warned_summary.json
+          retention-days: 30
+
+      - name: Summary
+        run: |
+          {
+            echo "### Warn-tier revalidation"
+            echo '```json'
+            python3 -c "import json; d=json.load(open('warned_summary.json')); d.pop('admitted_ids', None); print(json.dumps(d, indent=2))"
+            echo '```'
+            echo "Asset: \`${{ steps.package.outputs.asset }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
