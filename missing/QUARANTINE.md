@@ -239,6 +239,10 @@ published `refetch-results` with **0 pass / 880 still-failing**.
 | `matches_index.csv` statuses | 16,862 clean / 1,289 warning / 230 source-gap |
 | Date range | 2001-12-19 to 2026-11-09 |
 
+Catalog run 42662430009 publishes the same 18,381 records and adds the dated
+calendar (`calendar.html`, `calendar.json` and the 18,381-file `m/` per-match
+store, 275 MB gzipped).
+
 ### Residual after the second pass
 
 - **650 quarantined**, all re-fetched today and still failing: 475 carry a

@@ -46,6 +46,12 @@ slice `lake_manifest.json`, and a slice README. Zips are assets on the rolling
 rebuilt nightly after the consolidate job, and no third-party storage account
 or credentials are involved.
 
+A dated **calendar view** at `calendar.html` lists every published match by
+year, month and day. Pick a day, open a match to check its innings and
+validation tier, or download that single match as `m/<match_id>.json.gz`
+(decompressed in the browser). The per-match store is rebuilt with the catalog
+and stays inside the Pages size budget.
+
 Every published match carries `meta.validation_status`: `clean` (no caveat),
 `warning` (the recorded source warning is in `meta.validation_warnings`) or
 `source_gap` (a small, disclosed scorecard/ball-by-ball disagreement; see
