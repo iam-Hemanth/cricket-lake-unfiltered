@@ -55,6 +55,46 @@ that were already admitted.
   dismissals. Some are parser bugs (penalty runs, over grouping); some are
   genuine upstream defects.
 
+## Disjoint groups, by primary cause
+
+Each match is assigned once, in this order. "Single-cause" is the count whose
+error list contains only that cause.
+
+| Group | Matches | Single-cause | Why it is withheld | Best way to allow |
+| --- | ---: | ---: | --- | --- |
+| A. Commentary running total only | 1,273 | 1,273 | The per-ball `total_inning_runs` disagrees mid-innings, but every innings' final total equals the scorecard; all other checks pass | Admit with a warning; keep the source field, add `validation_warnings` |
+| B. Missing non-striker id only | 76 | 76 | `identity_issues` records a missing `non_striker_id` | Null the field, count it in `missing_non_striker_deliveries`, as already done for 4,607 clean deliveries |
+| C. Commentary + non-striker id | 1 | 0 | Both A and B | Same two fixes |
+| D. Missing deliveries | 28 | 0 | A scorecard innings with runs/wickets has no or too few deliveries | Re-fetch the innings; not repairable from the parsed archive |
+| E. Unknown dismissal | 15 | 8 | `dismissalType=unknown` is not in the map | Map from the scorecard/commentary, then revalidate |
+| F. Penalty review | 85 | 0 | `source_facts` cannot settle a penalty component | Apply the scorecard-proven penalty adjustment, then revalidate |
+| G. Over / legal-ball grouping | 247 | 6 | An over contains an impossible legal-ball count | Re-bucket deliveries by the source markers; most also carry H |
+| H. Scorecard totals / coverage | 428 | 79 | Runs, wickets, legal balls or extras disagree with the scorecard | Separate penalty/parse errors from genuine commentary defects; repair or leave flagged |
+| I. Sequence / marker | 16 | 15 | Non-monotonic sequence or an uncorroborated delivery marker | Manual review against the source |
+
+The safe first tier is **A + B + C = 1,350 matches**: all are scorecard-consistent,
+and the only disagreement is an advisory commentary field or a missing
+non-striker id. The remaining **819** are D–I.
+
+## Recommended publication policy
+
+1. **Warned, not failed.** Add `validation_warnings` and set
+   `validation_status="warning"` for A–C. Keep every source field unchanged;
+   do not silently rewrite the commentary total. Publish them in the normal
+   slices with the warning visible in `lake_manifest.json` and README.
+2. **Repair what the source proves.** Work E → F → G, in that order, with a
+   before/after validation report per group. H is the residual bucket; only the
+   penalty/parse subset should move.
+3. **Re-fetch D and manually review I.** These 44 matches are the least likely
+   to recover; do not guess at missing deliveries.
+4. **Flagged tier for the rest.** If H still contains genuine source defects,
+   publish an explicitly labelled opt-in group with `validation_status` and
+   errors intact. Never mix it into the clean slices.
+5. **Rebuild and verify.** Revalidate, run `consolidate.py --published-only`,
+   rebuild the master and then the catalog. Compare `quarantined_matches`,
+   `matches_index.csv` row count and each slice's manifest before/after.
+
+
 ## Latest window is also missing 9 matches
 
 The 2026-11-09 05:01 UTC `Update lake (6-hourly)` run discovered 9 matches and
