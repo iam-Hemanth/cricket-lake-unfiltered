@@ -90,16 +90,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/deltas
-          gh release download data-unfiltered-master \
-            -p 'cricket_lake_unfiltered_master.tar.gz' \
-            -p 'matches_index.csv' \
-            -p 'lake_manifest.json' \
-            --dir artifacts --clobber
-          gh release download data-unfiltered-deltas \
-            -p 'lake_delta_*.tar.gz' \
-            --dir artifacts/deltas --clobber
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download"
           gh release view data-unfiltered-deltas --json assets > artifacts/delta_assets.json
           gh release view data-unfiltered-batches --json assets > artifacts/batches_assets.json
+          for name in cricket_lake_unfiltered_master.tar.gz matches_index.csv lake_manifest.json; do
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+              -o "artifacts/$name" "$base/data-unfiltered-master/$name"
+          done
+          jq -r '.assets[].name | select(startswith("lake_delta_") and endswith(".tar.gz"))' \
+            artifacts/delta_assets.json | sort | while IFS= read -r name; do
+              echo "$base/data-unfiltered-deltas/$name artifacts/deltas/$name"
+            done > delta_downloads.txt
+          cat delta_downloads.txt | xargs -r -n 2 -P 6 sh -c 'curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$2" "$1"' sh
+          test -s artifacts/cricket_lake_unfiltered_master.tar.gz
+          echo "downloaded $(find artifacts/deltas -name '*.tar.gz' | wc -l) deltas"
 
       - name: Normalize metadata and plan slices
         run: |
@@ -120,6 +124,20 @@ jobs:
         with:
           name: download-plan
           path: download_plan
+          retention-days: 7
+
+      - name: Write release asset list
+        run: |
+          set -euo pipefail
+          jq -r '.assets[].name | select(startswith("lake_delta_") and endswith(".tar.gz"))' \
+            artifacts/delta_assets.json | sort > deltas.txt
+          { echo "cricket_lake_unfiltered_master.tar.gz"; cat deltas.txt; } > release_assets.txt
+          echo "$(wc -l < deltas.txt) delta assets"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: release_assets.txt
           retention-days: 7
 
       - name: Check per-release asset budget
@@ -168,18 +186,26 @@ jobs:
           name: download-plan
           path: download_plan
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+
       - name: Download master and deltas
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/deltas
-          gh release download data-unfiltered-master \
-            -p 'cricket_lake_unfiltered_master.tar.gz' \
-            --dir artifacts --clobber
-          gh release download data-unfiltered-deltas \
-            -p 'lake_delta_*.tar.gz' \
-            --dir artifacts/deltas --clobber
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download"
+          while IFS= read -r name; do
+            [ -z "$name" ] && continue
+            if [ "$name" = "cricket_lake_unfiltered_master.tar.gz" ]; then
+              echo "$base/data-unfiltered-master/$name artifacts/$name"
+            else
+              echo "$base/data-unfiltered-deltas/$name artifacts/deltas/$name"
+            fi
+          done < release_assets.txt > downloads.txt
+          cat downloads.txt | xargs -r -n 2 -P 6 sh -c 'curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$2" "$1"' sh
+          test -s artifacts/cricket_lake_unfiltered_master.tar.gz
+          echo "downloaded $(find artifacts/deltas -name '*.tar.gz' | wc -l) deltas"
 
       - name: Build shard ${{ matrix.shard }}
         run: |
