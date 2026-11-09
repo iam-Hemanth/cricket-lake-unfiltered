@@ -42,7 +42,7 @@ MATCH INDEX
   with match_id, date, format, team1, team2, winner, result, competition,
   venue, city, season, total_balls, total_runs, total_wickets,
   wagon_wheel_balls, pitch_line_balls, shot_type_balls, schema_version,
-  gender and level.
+  validation_status, gender and level.
 
 NOTES
   * Quarantined matches are excluded from the public lake.
@@ -234,10 +234,11 @@ def main() -> int:
         flagged = manifest["validation"]["warning_matches"] + manifest["validation"]["source_gap_matches"]
         if flagged:
             validation_note = (
-                f"  * {manifest['validation']['warning_matches']:,} warning-tier and "
-                f"{manifest['validation']['source_gap_matches']:,} source-gap matches carry "
-                "recorded caveats in meta.validation_warnings; their scorecard and "
-                "ball-by-ball totals differ as described there."
+                f"  * Validation tiers in this slice: "
+                f"{manifest['validation']['warning_matches']:,} warning, "
+                f"{manifest['validation']['source_gap_matches']:,} source-gap. "
+                "Those records carry their exact caveats in meta.validation_warnings; "
+                "scorecard and ball-by-ball totals differ as described there."
             )
         else:
             validation_note = "  * All matches in this slice pass the structural validator."
