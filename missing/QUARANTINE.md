@@ -83,11 +83,13 @@ v1 policy regardless.
    `src/validator.py`, demote the cumulative `total_inning_runs` comparison to a
    warning when the innings' final runs, wickets, legal balls and extras all
    reconcile. Annotate `meta.validation_warnings`; do not rewrite the source
-   field. Revalidate the recovery archive. Expected clean gain: **1,273**
-   (catalog 16,856 → 18,129 before dedupe).
+   field. A simulation over the archive (drop running-score errors only when
+   every innings' final total equals its scorecard, drop non-striker-only
+   identity errors) passes **1,350 matches** and leaves **819** quarantined.
 2. **Normalise missing non-striker ids.** Leave `non_striker_id` null, increment
    `missing_non_striker_deliveries`, and do not turn the absence into a hard
-   `identity_issue`. Expected gain: **+76** pure matches (plus 1558436).
+   `identity_issue`. This is already tolerated in the clean corpus (4,607
+   deliveries), so it is a consistency fix, not a new allowance.
 3. **Penalty and grouping audit (next ~150–250).** Recompute the 87
    `needs_review` penalties and the 281 impossible-over cases against the
    scorecard. Penalty runs (5 runs, no delivery) explain a meaningful share of
@@ -110,6 +112,6 @@ v1 policy regardless.
   `coverage.quarantined_matches` before/after.
 - Rebuild the master, then the catalog; verify the new ids appear in
   `matches_index.csv` and that each slice's manifest count adds up.
-- Expected receipts: quarantined 2,169 → 820 (after steps 1–2, before step 3),
-  and the clean lake 16,856 → 18,205. Do not claim these until the rerun
+- Expected receipts: quarantined 2,169 → **819** (simulated after steps 1–2),
+  and the clean lake 16,856 → **18,206**. Do not claim these until the rerun
   reports them.
