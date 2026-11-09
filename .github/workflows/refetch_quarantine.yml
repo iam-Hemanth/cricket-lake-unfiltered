@@ -76,19 +76,36 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, pathlib
+          import json, pathlib, sys
+          sys.path.insert(0, '.')
+          from src.validator import validate_match_data
+
+          # A stored "failed" status is the pre-repair verdict: the warn-tier
+          # batch already republished every file the current validator admits.
+          # Re-fetch only the ids that still fail today, otherwise the matrix
+          # spends its slots on matches that are already published.
           ids = []
+          now_passing = 0
           for p in sorted(pathlib.Path('recovered/matches').glob('*.json')):
               try:
                   data = json.loads(p.read_text())
               except Exception:
                   continue
-              if (data.get('meta') or {}).get('validation_status') == 'failed':
+              if (data.get('meta') or {}).get('validation_status') != 'failed':
+                  continue
+              if validate_match_data(data):
                   ids.append(p.stem)
+              else:
+                  now_passing += 1
           pathlib.Path('quarantine_ids.txt').write_text('\n'.join(ids) + ('\n' if ids else ''))
-          print(f'quarantined ids: {len(ids)}')
+          print(f'still-failing ids: {len(ids)} (skipped {now_passing} that now pass)')
           if not ids:
-              raise SystemExit('no quarantined matches in this batch')
+              raise SystemExit('no still-failing matches in this batch')
+          if len(ids) > 20 * 44:
+              raise SystemExit(
+                  f'{len(ids)} still-failing ids exceed the 20 x 44 matrix; '
+                  'raise the matrix or chunk size before dispatching'
+              )
           PY
 
       - name: Re-fetch chunk ${{ matrix.chunk }} from source
