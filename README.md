@@ -45,3 +45,10 @@ slice `lake_manifest.json`, and a slice README. Zips are assets on the rolling
 `download-slices` release; verify them against `checksums.txt`. The catalog is
 rebuilt nightly after the consolidate job, and no third-party storage account
 or credentials are involved.
+
+Every published match carries `meta.validation_status`: `clean` (no caveat),
+`warning` (the recorded source warning is in `meta.validation_warnings`) or
+`source_gap` (a small, disclosed scorecard/ball-by-ball disagreement; see
+`meta.source_gap`). The slice README and the catalog page show the tier counts,
+and `matches_index.csv` exposes the status per match. Quarantined matches are
+not published.

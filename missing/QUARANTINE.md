@@ -1,12 +1,15 @@
 # Quarantine audit — 2,169 matches (2026-11-09)
 
 Source: `matches_batch_recovery_20261025.tar.gz` on the `data-unfiltered-batches`
-release. Every match below carries `meta.validation_status = "failed"` and is
-excluded from the public catalog; none of the ids appear in the published
-`matches_index.csv` (16,856 rows). The archive also contains 217 clean matches
-that were already admitted.
+release. Every match below carried `meta.validation_status = "failed"` in that
+batch. As of 09 Nov 2026, **1,289 have been admitted to the published lake** as
+`validation_status = "warning"` (their recorded warnings are preserved), and the
+master grew from 16,856 to **18,145 matches**. This document's first half is the
+original pool analysis; the second half is the measured state of the **880 that
+still fail**, followed by the source-gap tier. The archive also contains 217
+clean matches that were already admitted.
 
-## Who is excluded
+## Who was in the quarantine pool
 
 | Slice | Matches |
 | --- | --- |
@@ -122,6 +125,24 @@ missing scorecard wicket, 72 are one legal ball out, 18 disagree only in the
 extras split (final runs reconcile), 16 differ by 1–2 final runs, 9 carry an
 `unknown` dismissal label, and 6 have a shifted over boundary (e.g. 3+9 legal
 balls across two overs).
+
+## Source-gap tier (09 Nov 2026)
+
+A still-failing match is admitted as `validation_status = "source_gap"` only
+when the validator's every error is one of: scorecard wickets, legal-ball
+coverage, exact runs, extras breakdown, unknown dismissal kind, or an over
+length explained by an adjacent pair. In addition, summed per-innings deltas
+must be at most 2 legal balls, 2 runs and 1 wicket, every innings must have a
+source snapshot, and there must be no structural, running-total, penalty or
+identity error. The file keeps the exact error list in
+`meta.validation_warnings` and the deltas in `meta.source_gap`; nothing is
+backfilled. On the pre-refetch batch this admits **230 of the 880** (97 FC,
+59 T20, 31 List A, 25 T20I, 18 other formats). The remainder is larger than a
+source disagreement and stays quarantined.
+
+The admission batch is `matches_batch_sourcegap_*.tar.gz`. Its name sorts after
+the recovery and refetch batches, so the consolidated master takes these files
+for the same match id.
 
 ## Latest window is also missing 9 matches
 
