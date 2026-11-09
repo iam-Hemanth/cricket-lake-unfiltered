@@ -106,6 +106,9 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     (out / "downloads.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     shutil.copyfile(args.template, out / "index.html")
+    fonts_src = Path(args.template).resolve().parent / "fonts"
+    if fonts_src.is_dir():
+        shutil.copytree(fonts_src, out / "fonts", dirs_exist_ok=True)
 
     lines = [f"{item['sha256']}  {item['url']}" for item in sorted(fragments, key=lambda x: x["id"])]
     (out / "checksums.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")

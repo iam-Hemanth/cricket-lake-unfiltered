@@ -1,128 +1,754 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-mode="paper">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cricket Lake — Downloads</title>
+<meta name="description" content="Sliced ball-by-ball cricket downloads from the published Cricket Lake: recent windows, formats, years, tournaments, teams, countries and the complete archive.">
+<link rel="preload" href="fonts/instrument-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/crimson-600.woff2" as="font" type="font/woff2" crossorigin>
 <style>
-  :root {
-    --paper: #f3efe4;
-    --paper-2: #ebe5d6;
-    --ink: #16251d;
-    --muted: #5d6b61;
-    --green: #1f4d3a;
-    --green-2: #2f6b52;
-    --orange: #b65f38;
-    --line: rgba(22, 37, 29, .16);
-    --card: rgba(255, 253, 247, .72);
-    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  @font-face {
+    font-family: "Instrument Sans";
+    src: url("fonts/instrument-400.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
   }
-  * { box-sizing: border-box; }
+  @font-face {
+    font-family: "Instrument Sans";
+    src: url("fonts/instrument-500.woff2") format("woff2");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Crimson Pro";
+    src: url("fonts/crimson-400.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Crimson Pro";
+    src: url("fonts/crimson-600.woff2") format("woff2");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  :root {
+    --paper: #f4f0e6;
+    --paper-2: #ebe6d8;
+    --card: #fbf9f2;
+    --card-2: #f7f3e9;
+    --ink: #1b2b2a;
+    --ink-2: #465c5a;
+    --ink-3: #5b6b69;
+    --line: rgba(27, 43, 42, .15);
+    --line-soft: rgba(27, 43, 42, .08);
+    --line-strong: rgba(27, 43, 42, .3);
+    --forest: #1c403f;
+    --forest-soft: #1b4a49;
+    --moss: #3b6664;
+    --green: #356f67;
+    --green-wash: #dfeae6;
+    --green-wash-2: #eaf1ee;
+    --grain-opacity: .22;
+    --shadow-soft: 0 18px 50px -30px rgba(16, 38, 34, .28);
+    --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --serif: "Crimson Pro", Georgia, "Times New Roman", serif;
+    --mono: "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --shell: 1420px;
+    --r-sm: 8px;
+    --r-lg: 18px;
+    --r-pill: 999px;
+    color-scheme: light;
+  }
+
+  html[data-mode="dusk"] {
+    --paper: #0d1516;
+    --paper-2: #121c1d;
+    --card: #162223;
+    --card-2: #1a2728;
+    --ink: #edf1ea;
+    --ink-2: #bcc9c3;
+    --ink-3: #90a39c;
+    --line: rgba(238, 240, 231, .16);
+    --line-soft: rgba(238, 240, 231, .08);
+    --line-strong: rgba(238, 240, 231, .32);
+    --forest: #d3e9df;
+    --forest-soft: #173234;
+    --moss: #a6cbc1;
+    --green: #8ed1c4;
+    --green-wash: #182a28;
+    --green-wash-2: #172522;
+    --grain-opacity: .14;
+    --shadow-soft: 0 18px 50px -30px rgba(0, 0, 0, .7);
+    color-scheme: dark;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body {
-    margin: 0; color: var(--ink); background:
-      radial-gradient(1200px 500px at 95% -10%, rgba(182,95,56,.13), transparent 60%),
-      radial-gradient(900px 500px at -10% 0%, rgba(31,77,58,.10), transparent 55%),
-      var(--paper);
-    font-family: var(--sans);
-    line-height: 1.55;
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 400 16px/1.62 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    transition: background-color .35s ease, color .35s ease;
   }
-  a { color: var(--green); text-decoration-thickness: 1px; text-underline-offset: 3px; }
-  a:hover { color: var(--orange); }
-  .wrap { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
-  header { padding: 64px 0 34px; border-bottom: 1px solid var(--line); }
-  .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--orange); }
-  h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(42px, 7vw, 86px); line-height: .95; letter-spacing: -.03em; margin: 14px 0 16px; }
-  h1 em { font-style: italic; color: var(--green-2); }
-  .lede { max-width: 720px; font-size: 17px; color: var(--muted); margin: 0 0 30px; }
-  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
-  .stat { background: var(--paper); padding: 18px 18px 16px; }
-  .stat .v { font-family: var(--serif); font-size: 26px; line-height: 1.1; }
-  .stat .l { font-family: var(--mono); font-size: 10px; letter-spacing: .13em; text-transform: uppercase; color: var(--muted); margin-top: 7px; }
-  .toolbar { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 26px 0 8px; flex-wrap: wrap; }
-  .search { position: relative; flex: 1 1 320px; max-width: 520px; }
-  .search input { width: 100%; padding: 13px 16px 13px 42px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 15px var(--sans); border-radius: 2px; outline: none; }
-  .search input:focus { border-color: var(--green-2); box-shadow: 0 0 0 3px rgba(47,107,82,.12); }
-  .search svg { position: absolute; left: 14px; top: 14px; opacity: .55; }
-  .toolbar .links { font-family: var(--mono); font-size: 11px; letter-spacing: .04em; color: var(--muted); display: flex; gap: 16px; }
-  .notice { margin: 18px 0 6px; border: 1px solid var(--line); border-left: 3px solid var(--orange); background: rgba(182,95,56,.06); padding: 14px 16px; font-size: 13px; color: var(--muted); }
-  .notice strong { color: var(--ink); font-weight: 600; }
-  main { padding: 10px 0 72px; }
-  .group { margin: 46px 0 0; }
-  .group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
-  h2 { font-family: var(--serif); font-weight: 500; font-size: clamp(26px, 4vw, 40px); letter-spacing: -.02em; margin: 0; }
-  .group-desc { color: var(--muted); font-size: 13px; max-width: 560px; text-align: right; }
-  h3 { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 28px 0 12px; }
-  .slices { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
-  .slice { background: var(--card); border: 1px solid var(--line); padding: 18px 18px 15px; display: flex; flex-direction: column; gap: 10px; min-height: 160px; transition: border-color .15s, transform .15s, background .15s; }
-  .slice:hover { border-color: rgba(31,77,58,.45); transform: translateY(-1px); background: rgba(255,253,247,.95); }
-  .slice h4 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.35; letter-spacing: -.01em; }
-  .slice .desc { color: var(--muted); font-size: 12px; margin: 0; }
-  .slice .meta { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chip { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; border: 1px solid var(--line); padding: 3px 6px; color: var(--muted); white-space: nowrap; }
-  .dl { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; text-decoration: none; border-bottom: 1px solid var(--green); color: var(--green); padding-bottom: 2px; }
-  .dl:hover { color: var(--orange); border-color: var(--orange); }
-  footer { border-top: 1px solid var(--line); padding: 30px 0 50px; color: var(--muted); font-size: 12px; }
-  footer .cols { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
-  footer code { font-family: var(--mono); font-size: 11px; background: rgba(31,77,58,.07); padding: 1px 4px; }
-  .empty { padding: 50px 0; color: var(--muted); font-family: var(--mono); font-size: 13px; }
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    pointer-events: none;
+    opacity: var(--grain-opacity);
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.32'/%3E%3C/svg%3E");
+  }
+  html[data-mode="dusk"] body::after { mix-blend-mode: soft-light; }
+
+  ::selection { background: var(--green-wash); color: var(--ink); }
+  a { color: inherit; text-decoration: none; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  p, h1, h2, h3 { margin: 0; }
+  svg { display: block; flex: none; }
+  :focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+
+  .wrap { width: min(calc(100% - 80px), var(--shell)); margin-inline: auto; }
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .skip {
+    position: fixed;
+    top: 10px; left: 10px;
+    z-index: 200;
+    transform: translateY(-160%);
+    padding: 10px 16px;
+    border-radius: var(--r-sm);
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 12px;
+    transition: transform .2s ease;
+  }
+  .skip:focus { transform: none; }
+
+  /* ------------------------------ header ------------------------------ */
+
+  .site-head {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--paper) 90%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    height: 62px;
+  }
+  .brand { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+  .brand .mark { width: 24px; height: 24px; color: var(--forest); }
+  .brand-name { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+  .brand-name b { font-size: 13.5px; font-weight: 500; letter-spacing: -.01em; }
+  .brand-name span {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .segmented {
+    display: inline-flex;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    background: var(--card);
+  }
+  .segmented button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: var(--r-pill);
+    background: transparent;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: .04em;
+    color: var(--ink-3);
+    transition: background-color .18s ease, color .18s ease;
+  }
+  .segmented button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .segmented svg { width: 11px; height: 11px; }
+
+  /* ------------------------------ hero ------------------------------ */
+
+  .hero { padding: 54px 0 34px; }
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--moss);
+  }
+  .eyebrow::before { content: ""; width: 22px; height: 1px; background: currentColor; opacity: .6; }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(300px, .72fr);
+    gap: clamp(28px, 4vw, 64px);
+    align-items: end;
+    margin-top: 14px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(38px, 5.2vw, 58px);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -.03em;
+  }
+  h1 em { font-style: italic; font-weight: 400; color: var(--moss); }
+  .lede { color: var(--ink-2); font-size: 15.5px; max-width: 58ch; }
+  .hero-side { display: flex; flex-direction: column; align-items: flex-start; gap: 18px; }
+  .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+  .meta-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px 13px;
+    margin-top: 24px;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .meta-line b { font-weight: 400; color: var(--ink-2); }
+  .meta-line .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--green); opacity: .7; }
+
+  /* ---------------------------- workbench ---------------------------- */
+
+  .workbench {
+    display: grid;
+    grid-template-columns: 196px minmax(0, 1fr) 288px;
+    gap: 28px;
+    align-items: start;
+    padding-top: 6px;
+  }
+  .rail { position: sticky; top: 86px; padding-top: 8px; }
+  .rail-label {
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 8px;
+    padding-left: 10px;
+  }
+  .rail nav { display: flex; flex-direction: column; gap: 2px; }
+  .rail-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 34px;
+    padding: 0 10px;
+    border-radius: var(--r-sm);
+    font-size: 12px;
+    color: var(--ink-2);
+    transition: background-color .16s ease, color .16s ease;
+  }
+  .rail-item:hover { background: var(--card-2); color: var(--ink); }
+  .rail-item.active { background: var(--green-wash); color: var(--forest); }
+  .rail-item .count { font-family: var(--mono); font-size: 9px; color: var(--ink-3); }
+  .rail-item.active .count { color: var(--forest); opacity: .8; }
+  .rail-note {
+    margin-top: 16px;
+    padding: 14px 10px 0;
+    border-top: 1px solid var(--line-soft);
+    font-family: var(--mono);
+    font-size: 8.5px;
+    letter-spacing: .03em;
+    line-height: 1.7;
+    color: var(--ink-3);
+  }
+  .desk { min-width: 0; scroll-margin-top: 80px; }
+  .desk-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .search { position: relative; flex: 1 1 280px; }
+  .search svg {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    color: var(--ink-3);
+  }
+  .search input {
+    width: 100%;
+    height: 38px;
+    padding: 0 14px 0 34px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--card);
+    font-size: 13.5px;
+    outline: none;
+    transition: border-color .16s ease, box-shadow .16s ease;
+  }
+  .search input::placeholder { color: var(--ink-3); opacity: .85; }
+  .search input:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-wash); }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    background: var(--card);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-2);
+    transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+  }
+  .btn:hover { background: var(--green-wash-2); border-color: var(--line-strong); color: var(--ink); }
+  .btn.primary { background: var(--forest); border-color: var(--forest); color: var(--paper); font-family: var(--sans); }
+  .btn.primary:hover { background: var(--forest-soft); border-color: var(--forest-soft); color: var(--paper); }
+  .btn-quiet {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 2px;
+    transition: color .16s ease, border-color .16s ease;
+  }
+  .btn-quiet:hover { color: var(--forest); border-color: var(--forest); }
+  .filter-line {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: .06em;
+    color: var(--ink-3);
+    margin: 0 0 12px;
+  }
+  .filter-line[hidden] { display: none; }
+
+  /* ------------------------------ groups ------------------------------ */
+
+  .group { margin-top: 26px; scroll-margin-top: 80px; }
+  .group-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .group h2 {
+    font-family: var(--serif);
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -.02em;
+  }
+  .group-count {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .group-desc {
+    margin: 7px 0 4px;
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--ink-3);
+    max-width: 76ch;
+  }
+  .subgroup { border-bottom: 1px solid var(--line-soft); }
+  .subgroup summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 14px;
+    gap: 12px;
+    align-items: center;
+    min-height: 40px;
+    padding: 7px 8px;
+    cursor: pointer;
+    list-style: none;
+    transition: background-color .14s ease;
+  }
+  .subgroup summary::-webkit-details-marker { display: none; }
+  .subgroup summary:hover { background: var(--green-wash-2); }
+  .sub-title { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub-meta {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    letter-spacing: .03em;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .chev { width: 12px; height: 12px; color: var(--ink-3); transition: transform .18s ease; }
+  .subgroup[open] .chev { transform: rotate(180deg); }
+  .subgroup[open] > summary { border-bottom: 1px solid var(--line-soft); }
+  .rows { padding: 2px 0 10px; }
+  .row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 16px;
+    gap: 12px;
+    align-items: center;
+    min-height: 40px;
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--line-soft);
+    transition: background-color .14s ease;
+  }
+  .row:last-child { border-bottom: 0; }
+  .row:hover { background: var(--green-wash-2); }
+  .row-main {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .row-title { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+  .row:hover .row-title { color: var(--forest); }
+  .row-desc { font-size: 11px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; }
+  .row-meta {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    letter-spacing: .03em;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .dl-ico { width: 14px; height: 14px; color: var(--ink-3); }
+  .row:hover .dl-ico { color: var(--forest); }
+  .empty {
+    padding: 48px 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+
+  /* ------------------------------ monitor ------------------------------ */
+
+  .monitor {
+    position: sticky;
+    top: 86px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    background: var(--card);
+    padding: 18px;
+    box-shadow: var(--shadow-soft);
+  }
+  .mon-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line-soft);
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .mon-metric { padding: 13px 0; border-bottom: 1px solid var(--line-soft); }
+  .mon-metric .l {
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .mon-metric .v {
+    margin-top: 3px;
+    font-family: var(--serif);
+    font-size: 32px;
+    line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+  }
+  .mon-metric .s {
+    margin-top: 2px;
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: .03em;
+    color: var(--ink-3);
+  }
+  .mon-links { display: flex; flex-direction: column; padding: 8px 0 2px; }
+  .mon-links a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 32px;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 11.5px;
+    color: var(--ink-2);
+    transition: color .16s ease;
+  }
+  .mon-links a:last-child { border-bottom: 0; }
+  .mon-links a:hover { color: var(--forest); }
+  .mon-links svg { width: 12px; height: 12px; }
+  .mon-note {
+    margin-top: 10px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line-soft);
+    font-family: var(--mono);
+    font-size: 8.5px;
+    line-height: 1.7;
+    letter-spacing: .02em;
+    color: var(--ink-3);
+  }
+
+  /* ------------------------------ footer ------------------------------ */
+
+  .site-foot { margin-top: 64px; border-top: 1px solid var(--line-strong); }
+  .foot-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr .9fr;
+    gap: 32px;
+    padding: 24px 0 48px;
+    font-family: var(--mono);
+    font-size: 8.5px;
+    line-height: 1.75;
+    letter-spacing: .02em;
+    color: var(--ink-3);
+  }
+  .foot-grid strong {
+    display: block;
+    margin-bottom: 3px;
+    font-weight: 500;
+    font-size: 8px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .foot-grid p { margin: 0 0 10px; }
+  .foot-grid a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .foot-grid a:hover { color: var(--forest); }
+  .foot-grid code {
+    background: var(--green-wash-2);
+    border-radius: 4px;
+    padding: 1px 4px;
+    color: var(--ink-2);
+  }
+
+  /* --------------------------- responsive --------------------------- */
+
+  @media (max-width: 1020px) {
+    .workbench { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+    .rail {
+      position: static;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 0 0 10px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .rail-label, .rail-note { display: none; }
+    .rail nav { flex-direction: row; gap: 6px; }
+    .rail-item {
+      min-height: 30px;
+      padding: 0 11px;
+      border: 1px solid var(--line);
+      border-radius: var(--r-pill);
+      white-space: nowrap;
+    }
+    .monitor { position: static; }
+    .mon-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .mon-metric { padding: 10px 14px 6px 0; border-bottom: 0; }
+    .mon-metric + .mon-metric { border-left: 1px solid var(--line-soft); padding-left: 14px; }
+    .mon-metric .v { font-size: 26px; }
+    .mon-links { flex-direction: row; flex-wrap: wrap; gap: 0 18px; padding-top: 4px; }
+    .mon-links a { border-bottom: 0; }
+  }
+
   @media (max-width: 760px) {
-    header { padding-top: 40px; }
-    .stats { grid-template-columns: repeat(2, 1fr); }
-    .group-head { display: block; }
-    .group-desc { text-align: left; margin-top: 8px; }
-    footer .cols { grid-template-columns: 1fr; }
+    .hero { padding-top: 40px; }
+    .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+    .foot-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; padding-bottom: 36px; }
+  }
+
+  @media (max-width: 640px) {
+    .wrap { width: calc(100% - 32px); }
+    h1 { font-size: 38px; }
+    .row-main { flex-wrap: wrap; white-space: normal; gap: 0 8px; }
+    .row { grid-template-columns: minmax(0, 1fr) 16px; }
+    .row-meta { grid-column: 1; grid-row: 2; margin-top: -2px; }
+    .row .dl-ico { grid-column: 2; grid-row: 1 / span 2; }
+    .subgroup summary { grid-template-columns: minmax(0, 1fr) auto 14px; }
+    .sub-meta { font-size: 8px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      transition-duration: .01ms !important;
+      animation-duration: .01ms !important;
+    }
   }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="kicker">Cricket Lake · ball-by-ball JSON</div>
-    <h1>The lake, <em>sliced.</em></h1>
-    <p class="lede">Downloads built from the published cricket lake — every match, every ball, plus tactical fields where the source has them. Pick a window, a format, a tournament, or the whole thing.</p>
-    <div class="stats">
-      <div class="stat"><div class="v" id="stat-matches">—</div><div class="l">published matches</div></div>
-      <div class="stat"><div class="v" id="stat-slices">—</div><div class="l">download slices</div></div>
-      <div class="stat"><div class="v" id="stat-size">—</div><div class="l">total archive size</div></div>
-      <div class="stat"><div class="v" id="stat-updated">—</div><div class="l">last built (UTC)</div></div>
-    </div>
-  </header>
+<a class="skip" href="#catalog">Skip to downloads</a>
 
-  <div class="toolbar">
-    <div class="search">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" type="search" placeholder="Filter by team, tournament, format, year…" autocomplete="off" aria-label="Filter downloads">
-    </div>
-    <div class="links">
-      <a href="README.txt">readme</a>
-      <a href="checksums.txt">checksums</a>
-      <a href="downloads.json">downloads.json</a>
+<header class="site-head">
+  <div class="wrap bar">
+    <a class="brand" href="./" aria-label="Cricket Lake downloads">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M8.1 4.3c2.7 4.8 2.7 10.6 0 15.4M15.9 4.3c-2.7 4.8-2.7 10.6 0 15.4" fill="none" stroke="currentColor" stroke-width="1.1" stroke-dasharray="1.5 2.1"/>
+      </svg>
+      <span class="brand-name"><b>Cricket Lake</b><span>downloads</span></span>
+    </a>
+    <div class="segmented" role="group" aria-label="Reading mode">
+      <button type="button" data-mode="paper" aria-pressed="true">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+        Paper
+      </button>
+      <button type="button" data-mode="dusk" aria-pressed="false">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 9.8A5.6 5.6 0 0 1 6.2 3a5.6 5.6 0 1 0 6.8 6.8Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+        Dusk
+      </button>
     </div>
   </div>
+</header>
 
-  <div class="notice" id="notice"></div>
-  <main id="catalog"><div class="empty">Loading catalog…</div></main>
-
-  <footer>
-    <div class="cols">
-      <div>
-        <p><strong>How to use.</strong> Each zip contains one <code>&lt;match_id&gt;.json</code> per match, a filtered <code>matches_index.csv</code>, a slice <code>lake_manifest.json</code>, and a slice README. Verify against <code>checksums.txt</code>.</p>
-        <p id="coverage"></p>
-      </div>
-      <div>
-        <p><strong>Source.</strong> ESPNcricinfo match pages, assembled by <a href="https://github.com/iam-Hemanth/cricket-lake-unfiltered">cricket-lake-unfiltered</a>. Check the source terms before redistributing.</p>
-        <p><strong>Schema.</strong> <span id="schema"></span></p>
+<div class="wrap">
+  <section class="hero">
+    <div class="eyebrow">Ball-by-ball JSON · published lake</div>
+    <div class="hero-grid">
+      <h1>The lake, <em>sliced.</em></h1>
+      <div class="hero-side">
+        <p class="lede">Every match, every ball, plus tactical fields where the source has them. Pick a window, a format, a tournament, or the whole thing.</p>
+        <div class="hero-actions">
+          <a id="full-download" class="btn primary" href="#" download>Download the full lake</a>
+          <a class="btn-quiet" href="#catalog">Browse the slices</a>
+        </div>
       </div>
     </div>
-  </footer>
+    <div class="meta-line">
+      <span>Updated <b id="meta-updated">—</b></span>
+      <span class="dot"></span>
+      <span><b id="meta-range">—</b></span>
+      <span class="dot"></span>
+      <span><b id="meta-matches">—</b> matches</span>
+      <span class="dot"></span>
+      <span><b id="meta-slices">—</b> slices</span>
+      <span class="dot"></span>
+      <span><b id="meta-size">—</b></span>
+    </div>
+  </section>
+
+  <div class="workbench">
+    <aside class="rail" aria-label="Catalog groups">
+      <div class="rail-label">Catalog</div>
+      <nav id="rail-nav" aria-label="Choose a group"></nav>
+      <p class="rail-note">Choose one group at a time. Search looks across all of them; each slice is a standalone zip.</p>
+    </aside>
+
+    <main class="desk">
+      <div class="desk-tools">
+        <label class="search">
+          <span class="sr-only">Filter downloads</span>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="m10.5 10.5 3 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          <input id="q" type="search" placeholder="Filter by team, tournament, format, year…" autocomplete="off" aria-label="Filter downloads">
+        </label>
+        <button id="toggle-all" class="btn" type="button">Expand all</button>
+      </div>
+      <p class="filter-line" id="filter-line" hidden></p>
+      <div id="catalog"><div class="empty">Loading catalog…</div></div>
+    </main>
+
+    <aside class="monitor" aria-label="Archive summary">
+      <div class="mon-head"><span>Monitor</span><span id="mon-date">—</span></div>
+      <div class="mon-metrics">
+        <div class="mon-metric">
+          <div class="l">Published matches</div>
+          <div class="v" id="stat-matches">—</div>
+          <div class="s">clean, published</div>
+        </div>
+        <div class="mon-metric">
+          <div class="l">Download slices</div>
+          <div class="v" id="stat-slices">—</div>
+          <div class="s">one zip each</div>
+        </div>
+        <div class="mon-metric">
+          <div class="l">Archive size</div>
+          <div class="v" id="stat-size">—</div>
+          <div class="s">total zip size</div>
+        </div>
+      </div>
+      <div class="mon-links">
+        <a href="README.txt">README
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12 12 4M6 4h6v6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a href="checksums.txt">Checksums
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12 12 4M6 4h6v6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a href="downloads.json">downloads.json
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12 12 4M6 4h6v6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+      <p class="mon-note" id="mon-note"></p>
+    </aside>
+  </div>
 </div>
+
+<footer class="site-foot">
+  <div class="wrap foot-grid">
+    <div>
+      <p><strong>How to use</strong>Each zip contains one <code>&lt;match_id&gt;.json</code> per match, a filtered <code>matches_index.csv</code>, a slice <code>lake_manifest.json</code>, and a slice README. Verify against <code>checksums.txt</code>.</p>
+      <p id="coverage"></p>
+    </div>
+    <div>
+      <p><strong>Source</strong>ESPNcricinfo match pages, assembled by <a href="https://github.com/iam-Hemanth/cricket-lake-unfiltered">cricket-lake-unfiltered</a>. Check the source terms before redistributing.</p>
+      <p><strong>Schema</strong><span id="schema"></span></p>
+    </div>
+    <div>
+      <p><strong>Updates</strong>Rebuilt nightly after the consolidate job. Release assets follow the catalog; stale slices are pruned.</p>
+    </div>
+  </div>
+</footer>
+
 <script>
 const $ = (id) => document.getElementById(id);
 const fmt = new Intl.NumberFormat("en-US");
+
+const ICON = {
+  chevron: '<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 6l4.5 4.5L12.5 6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  download: '<svg class="dl-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.2M5 7l3 3 3-3M3 13h10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
+
 function size(bytes) {
   const units = ["B", "KB", "MB", "GB"];
   let value = Number(bytes) || 0, i = 0;
@@ -140,69 +766,223 @@ function el(tag, cls, text) {
   if (text !== undefined) node.textContent = text;
   return node;
 }
+function countLabel(n, one, many) {
+  return `${fmt.format(n)} ${n === 1 ? one : many}`;
+}
+function shortTitle(slice, subgroupTitle) {
+  const title = slice.title || slice.id || "";
+  const prefix = subgroupTitle + " — ";
+  return title.startsWith(prefix) ? title.slice(prefix.length) : title;
+}
+
+let DATA = null;
+let openKeys = new Set();
+let seenGroups = new Set();
+let expandAll = false;
+let activeGroup = null;
+
+function groupCount(group) {
+  return (group.subgroups || []).reduce((n, sub) => n + (sub.slices || []).length, 0);
+}
+function groupSize(group) {
+  return (group.subgroups || []).reduce(
+    (n, sub) => n + (sub.slices || []).reduce((m, s) => m + (Number(s.size_bytes) || 0), 0),
+    0
+  );
+}
+function matchesQuery(group, sub, s, q) {
+  if (!q) return true;
+  return `${group.title} ${sub.title} ${s.title || ""} ${s.description || ""}`.toLowerCase().includes(q);
+}
+function defaultOpen(group) {
+  if (seenGroups.has(group.id)) return;
+  seenGroups.add(group.id);
+  if (group.subgroups && group.subgroups.length) {
+    openKeys.add(`${group.title}|${group.subgroups[0].title}`);
+  }
+}
+function selectGroup(id) {
+  if (!DATA) return;
+  const group = (DATA.groups || []).find((g) => g.id === id);
+  if (!group) return;
+  activeGroup = id;
+  $("q").value = "";
+  defaultOpen(group);
+  try { history.replaceState(null, "", "#" + id); } catch (err) {}
+  render(DATA);
+  if (window.matchMedia("(max-width: 1020px)").matches) {
+    const desk = document.querySelector(".desk");
+    if (desk) desk.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start"
+    });
+  }
+}
+
 function render(data) {
+  const q = ($("q").value || "").trim().toLowerCase();
+
   $("stat-matches").textContent = fmt.format(data.total_matches || 0);
   $("stat-slices").textContent = fmt.format(data.slice_count || 0);
   $("stat-size").textContent = data.total_size_label || "—";
-  $("stat-updated").textContent = dateLabel(data.generated_at);
+  $("mon-date").textContent = dateLabel(data.generated_at);
+  $("meta-updated").textContent = dateLabel(data.generated_at);
+  const range = data.date_range || {};
+  $("meta-range").textContent = `${range.earliest || "—"} → ${range.latest || "—"}`;
+  $("meta-matches").textContent = fmt.format(data.total_matches || 0);
+  $("meta-slices").textContent = fmt.format(data.slice_count || 0);
+  $("meta-size").textContent = data.total_size_label || "—";
   $("schema").textContent = JSON.stringify(data.schema_versions || {});
-  $("notice").innerHTML = "";
-  const notice = $("notice");
+
+  const quarantined = data.excluded_quarantined;
   const womens = data.genders && data.genders.female;
-  notice.append(
-    el("strong", null, "Coverage note. "),
-    el("span", null, `Only clean, published matches are included${data.excluded_quarantined ? ` (${fmt.format(data.excluded_quarantined)} quarantined matches excluded)` : ""}. Added windows cover the incremental/recovery feed since 24 Oct 2026.` + (womens ? " Women's-only downloads are withheld for v1 pending the T2 backfill." : ""))
-  );
-  $("coverage").textContent = `Published lake: ${fmt.format(data.total_matches || 0)} matches; ${fmt.format(data.slice_count || 0)} slices; ${data.total_size_label || ""}. Date range ${data.date_range?.earliest || "—"} to ${data.date_range?.latest || "—"}.`;
-  const root = $("catalog");
-  root.innerHTML = "";
-  const query = ($("q").value || "").trim().toLowerCase();
-  let shown = 0;
-  for (const group of data.groups || []) {
-    const section = el("section", "group");
-    const head = el("div", "group-head");
-    head.append(el("h2", null, group.title), el("div", "group-desc", group.description || ""));
-    section.append(head);
-    let groupShown = 0;
-    for (const sub of group.subgroups || []) {
-      const matches = (sub.slices || []).filter((s) => {
-        const hay = `${group.title} ${sub.title} ${s.title} ${s.description}`.toLowerCase();
-        return !query || hay.includes(query);
-      });
-      if (!matches.length) continue;
-      groupShown += matches.length;
-      section.append(el("h3", null, sub.title));
-      const grid = el("div", "slices");
-      for (const s of matches) {
-        const card = el("article", "slice");
-        card.append(el("h4", null, s.title), el("p", "desc", s.description || ""));
-        const meta = el("div", "meta");
-        const chips = el("div", "chips");
-        chips.append(el("span", "chip", `${fmt.format(s.count || 0)} ${s.count === 1 ? "match" : "matches"}`));
-        chips.append(el("span", "chip", size(s.size_bytes)));
-        meta.append(chips);
-        const link = el("a", "dl", "download ↓");
-        link.href = s.url;
-        link.setAttribute("download", "");
-        meta.append(link);
-        card.append(meta);
-        grid.append(card);
-      }
-      section.append(grid);
-    }
-    if (groupShown) { root.append(section); shown += groupShown; }
+  $("mon-note").textContent =
+    `Only clean, published matches are included${quarantined ? ` (${fmt.format(quarantined)} quarantined excluded)` : ""}. ` +
+    "Added windows cover the incremental/recovery feed since 24 Oct 2026." +
+    (womens ? " Women's-only downloads are withheld for v1 pending the T2 backfill." : "");
+  $("coverage").textContent =
+    `Published lake: ${fmt.format(data.total_matches || 0)} matches; ${fmt.format(data.slice_count || 0)} slices; ${data.total_size_label || ""}. ` +
+    `Date range ${range.earliest || "—"} to ${range.latest || "—"}.`;
+
+  const groups = data.groups || [];
+  const hash = (location.hash || "").replace(/^#/, "");
+  if (!activeGroup || !groups.some((g) => g.id === activeGroup)) {
+    activeGroup = groups.some((g) => g.id === hash) ? hash : (groups[0] && groups[0].id);
   }
-  if (!shown) root.append(el("div", "empty", "No slices match that filter."));
+  const active = groups.find((g) => g.id === activeGroup) || groups[0];
+  if (active && !q) defaultOpen(active);
+
+  const root = $("catalog");
+  const rail = $("rail-nav");
+  root.innerHTML = "";
+  rail.innerHTML = "";
+  let shown = 0;
+
+  for (const group of groups) {
+    const item = el("a", "rail-item");
+    item.href = "#" + group.id;
+    item.dataset.group = group.id;
+    const isActive = active && group.id === active.id && !q;
+    if (isActive) item.classList.add("active");
+    item.setAttribute("aria-current", isActive ? "true" : "false");
+    item.append(el("span", null, group.title), el("span", "count", fmt.format(groupCount(group))));
+    item.addEventListener("click", (e) => { e.preventDefault(); selectGroup(group.id); });
+    rail.append(item);
+  }
+
+  function buildGroup(group) {
+    const section = el("section", "group");
+    section.id = "group-" + (group.id || "other");
+    const head = el("div", "group-head");
+    head.append(el("h2", null, group.title));
+    head.append(el("span", "group-count", `${countLabel(groupCount(group), "slice", "slices")} · ${size(groupSize(group))}`));
+    section.append(head);
+    if (group.description) section.append(el("p", "group-desc", group.description));
+
+    let count = 0;
+    for (const sub of group.subgroups || []) {
+      const slices = (sub.slices || []).filter((s) => matchesQuery(group, sub, s, q));
+      if (!slices.length) continue;
+      count += slices.length;
+
+      const key = `${group.title}|${sub.title}`;
+      const det = el("details", "subgroup");
+      det.dataset.key = key;
+
+      const subTotal = (sub.slices || []).reduce((n, s) => n + (Number(s.size_bytes) || 0), 0);
+      const summary = el("summary");
+      summary.append(el("span", "sub-title", sub.title));
+      summary.append(el("span", "sub-meta", `${countLabel(slices.length, "slice", "slices")} · ${size(subTotal)}`));
+      summary.insertAdjacentHTML("beforeend", ICON.chevron);
+      det.append(summary);
+
+      const rows = el("div", "rows");
+      for (const s of slices) {
+        const row = el("a", "row");
+        row.href = s.url;
+        row.setAttribute("download", "");
+        row.title = `${s.title || s.id || ""}${s.description ? " — " + s.description : ""}`;
+        const main = el("span", "row-main");
+        main.append(el("span", "row-title", shortTitle(s, sub.title)));
+        if (s.description) main.append(el("span", "row-desc", s.description));
+        const meta = el("span", "row-meta", `${countLabel(s.count || 0, "match", "matches")} · ${size(s.size_bytes)}`);
+        row.append(main, meta);
+        row.insertAdjacentHTML("beforeend", ICON.download);
+        rows.append(row);
+      }
+      det.append(rows);
+
+      det.open = q ? true : (expandAll || openKeys.has(key));
+      summary.addEventListener("click", () => {
+        setTimeout(() => {
+          if (det.open) openKeys.add(key); else openKeys.delete(key);
+        }, 0);
+      });
+      section.append(det);
+    }
+    return { section, count };
+  }
+
+  if (q) {
+    for (const group of groups) {
+      const { section, count } = buildGroup(group);
+      if (!count) continue;
+      root.append(section);
+      shown += count;
+    }
+    $("filter-line").hidden = false;
+    $("filter-line").textContent = `${countLabel(shown, "slice", "slices")} match “${$("q").value.trim()}” across all groups`;
+  } else if (active) {
+    const { section, count } = buildGroup(active);
+    root.append(section);
+    shown = count;
+    $("filter-line").hidden = true;
+  }
+
+  if (!shown) root.append(el("div", "empty", q ? "No slices match that filter." : "No slices in this group."));
 }
-let DATA = null;
+
+
+function setMode(mode) {
+  document.documentElement.setAttribute("data-mode", mode);
+  document.querySelectorAll(".segmented [data-mode]").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+  });
+  try { localStorage.setItem("lake-mode", mode); } catch (err) {}
+}
+document.querySelectorAll(".segmented [data-mode]").forEach((btn) => {
+  btn.addEventListener("click", () => setMode(btn.dataset.mode));
+});
+try {
+  if (localStorage.getItem("lake-mode") === "dusk") setMode("dusk");
+} catch (err) {}
+
+$("toggle-all").addEventListener("click", () => {
+  expandAll = !expandAll;
+  if (!expandAll) openKeys.clear();
+  $("toggle-all").textContent = expandAll ? "Collapse all" : "Expand all";
+  if (DATA) render(DATA);
+});
+
+$("q").addEventListener("input", () => { if (DATA) render(DATA); });
+
 fetch("downloads.json", { cache: "no-store" })
-  .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
-  .then((data) => { DATA = data; render(data); })
+  .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+  .then((data) => {
+    DATA = data;
+    const complete = (data.groups || []).find((g) => g.id === "complete") || (data.groups || [])[data.groups.length - 1];
+    const full = complete && complete.subgroups && complete.subgroups[0] && complete.subgroups[0].slices[0];
+    if (full) {
+      const link = $("full-download");
+      link.href = full.url;
+      link.textContent = `Download the full lake · ${size(full.size_bytes)}`;
+    }
+    render(data);
+  })
   .catch((err) => {
     $("catalog").innerHTML = "";
-    $("catalog").append(el("div", "empty", `Could not load downloads.json (${err.message}). Check that it was uploaded next to index.html.`));
+    $("catalog").append(el("div", "empty", `Could not load downloads.json (${err.message}). Check that it was published next to index.html.`));
   });
-$("q").addEventListener("input", () => { if (DATA) render(DATA); });
 </script>
 </body>
 </html>
