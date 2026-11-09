@@ -363,8 +363,8 @@ const fmt = new Intl.NumberFormat("en-US");
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-const FMT_CLASS = { "Test":"test", "ODI":"odi", "T20I":"t20i", "T20":"t20", "FC":"fc", "First-Class":"fc", "List A":"lista", "ListA":"lista", "Other":"other" };
-const FMT_LABEL = { "FC":"First-class", "ListA":"List A", "Other":"Other" };
+const FMT_CLASS = { "Test":"test", "ODI":"odi", "T20I":"t20i", "T20":"t20", "First-class":"fc", "First-Class":"fc", "List A":"lista", "ListA":"lista", "Other":"other" };
+const FMT_LABEL = { "First-class":"First-class", "List A":"List A", "Other":"Other" };
 const ABBR = {
   "India":"IND","Pakistan":"PAK","Sri Lanka":"SL","Australia":"AUS","England":"ENG","New Zealand":"NZ","South Africa":"SA",
   "West Indies":"WI","Bangladesh":"BAN","Zimbabwe":"ZIM","Afghanistan":"AFG","Ireland":"IRE","Netherlands":"NED","Scotland":"SCO",
@@ -501,7 +501,7 @@ function renderFormatChips() {
   const counts = DATA.formats;
   const host = $("format-chips");
   host.innerHTML = "";
-  const order = ["Test","ODI","T20I","T20","FC","List A","Other"];
+  const order = ["Test","ODI","T20I","T20","First-class","List A","Other"];
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   const chips = [{ key: "", label: "All", n: total }].concat(
     order.filter((f) => counts[f]).map((f) => ({ key: f, label: fmtLabel(f), n: counts[f] }))

@@ -22,6 +22,15 @@ from pathlib import Path
 
 MAX_MATCH_BYTES = 700 * 1024 * 1024
 
+# The source keeps fine-grained format codes; the calendar groups them the way
+# the catalog does so the chips read "First-class" / "Other", not OtherODM.
+FORMAT_FAMILY = {
+    "Test": "Test", "ODI": "ODI", "T20I": "T20I", "T20": "T20",
+    "FC": "First-class", "First-Class": "First-class",
+    "ListA": "List A", "List A": "List A",
+    "OtherODM": "Other", "OtherMDM": "Other", "OtherT20": "Other", "Other": "Other",
+}
+
 
 def load_json(path: Path, default=None):
     if not path or not Path(path).exists():
@@ -72,7 +81,7 @@ def main() -> int:
             "a": row.get("team1") or "",
             "b": row.get("team2") or "",
             "c": row.get("competition") or "",
-            "f": row.get("format") or "Unknown",
+            "f": FORMAT_FAMILY.get(row.get("format") or "", "Other"),
             "v": row.get("venue") or "",
             "y": row.get("venue_country") or "",
             "r": row.get("result") or "",
