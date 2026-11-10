@@ -321,24 +321,6 @@ jobs:
               open(target, "w").write(text)
           PY
 
-      - name: Prune stale zips from the release
-        if: ${{ github.event.inputs.dry_run != 'true' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          jq -r '.groups[].subgroups[].slices[].id' catalog_out/downloads.json \
-            | sed 's/$/.zip/' | sort > wanted_zips.txt
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${SLICE_TAG}" \
-            --jq '.assets[] | "\(.id)\t\(.name)"' > assets.tsv || true
-          while IFS=$'\t' read -r id name; do
-            [ -z "$id" ] && continue
-            if ! grep -qxF "$name" wanted_zips.txt; then
-              echo "pruning $name"
-              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/$id"
-            fi
-          done < assets.tsv
-
       - uses: actions/upload-artifact@v4
         if: ${{ github.event.inputs.dry_run != 'true' }}
         with:
@@ -384,3 +366,39 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # The per-match store is ~18k files / 275 MB; the 10 min default
+          # timed out mid-sync on 10 Nov 2026.
+          timeout: 1200000
+
+  # Deleting stale zips before the Pages deploy leaves the live catalog
+  # pointing at 404s when the deploy fails. Prune only after a successful
+  # deploy.
+  prune:
+    needs: pages
+    if: ${{ github.event.inputs.dry_run != 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: catalog-html
+          path: catalog_out
+
+      - name: Prune stale zips from the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          jq -r '.groups[].subgroups[].slices[].id' catalog_out/downloads.json \
+            | sed 's/$/.zip/' | sort > wanted_zips.txt
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${SLICE_TAG}" \
+            --jq '.assets[] | "\(.id)\t\(.name)"' > assets.tsv || true
+          while IFS=$'\t' read -r id name; do
+            [ -z "$id" ] && continue
+            if ! grep -qxF "$name" wanted_zips.txt; then
+              echo "pruning $name"
+              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/$id"
+            fi
+          done < assets.tsv
