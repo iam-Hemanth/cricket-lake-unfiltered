@@ -53,6 +53,11 @@ TRANSIENT_ERROR_MARKERS = (
 
 def is_transient_error(error: str | None) -> bool:
     text = (error or "").lower()
+    # A validation error list is a data verdict even when it mentions a
+    # timed-out dismissal ("timed out: 0"); it must not match the network
+    # markers below and retry forever.
+    if text.startswith("validation errors:"):
+        return False
     return any(marker in text for marker in TRANSIENT_ERROR_MARKERS)
 
 
