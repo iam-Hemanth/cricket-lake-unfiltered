@@ -710,6 +710,25 @@ async function fetchMatch(id) {
   return data;
 }
 
+function inningsScore(inn) {
+  // Schema 3.3 records carry the source scorecard; legacy 3.0 records only
+  // have the delivery stream, so derive runs/wickets/legal balls from it.
+  const sc = inn.source_scorecard || {};
+  let runs = sc.runs, wickets = sc.wickets, balls = sc.balls;
+  if (runs != null && wickets != null && balls != null) return { runs, wickets, balls };
+  let r = 0, w = 0, b = 0, n = 0;
+  for (const ov of inn.overs || []) {
+    for (const d of ov.deliveries || []) {
+      n += 1;
+      r += (d.runs && d.runs.total) || 0;
+      w += (d.wickets || []).length;
+      if (d.is_legal) b += 1;
+    }
+  }
+  if (!n) return { runs: null, wickets: null, balls: null };
+  return { runs: runs ?? r, wickets: wickets ?? w, balls: balls ?? b };
+}
+
 async function toggleDetails(m, detail, card) {
   if (!detail.hidden) {
     detail.hidden = true;
@@ -723,9 +742,8 @@ async function toggleDetails(m, detail, card) {
   try {
     const data = await fetchMatch(m.i);
     const inns = (data.innings || []).map((inn) => {
-      const sc = inn.source_scorecard || {};
-      const balls = sc.balls;
-      const overs = balls != null ? `${Math.floor(balls / 6)}.${balls % 6}` : "—";
+      const sc = inningsScore(inn);
+      const overs = sc.balls != null ? `${Math.floor(sc.balls / 6)}.${sc.balls % 6}` : "—";
       return `<div class="inn-row"><span>${esc(inn.batting_team || "—")}</span><b>${sc.runs ?? "—"}/${sc.wickets ?? "—"}</b><span>${overs} ov</span></div>`;
     }).join("");
     const warnings = (data.meta?.validation_warnings || []).map((w) => `<li>${esc(w)}</li>`).join("");
