@@ -205,16 +205,19 @@ def validate_innings(
         and scorecard_source.get("runs") is not None
         and final_runs == scorecard_source.get("runs")
     )
+    # The warn policy demotes commentary drift only when the innings reconciles
+    # to the scorecard. Cap the tolerated drift at the largest value in the
+    # admitted warn corpus (46 runs) so a grossly corrupt counter still fails.
+    drift_cap = 50 if commentary_drift_allowed else 2
     for ov in overs:
         for d in ov.get("deliveries") or []:
             calc_runs += d.get("runs", {}).get("total", 0)
             cricinfo_total = d.get("total_inning_runs")
-            # Tolerate isolated 0-resets or minor single-ball typos if within 2 runs
+            # Tolerate isolated 0-resets or minor single-ball typos.
             if (
-                not commentary_drift_allowed
-                and cricinfo_total is not None
+                cricinfo_total is not None
                 and cricinfo_total > 0
-                and abs(calc_runs - cricinfo_total) > 2
+                and abs(calc_runs - cricinfo_total) > drift_cap
             ):
                 errors.append(
                     f"Running score mismatch at Ball {d.get('actual_delivery')}: "
@@ -294,12 +297,14 @@ def validate_player_registry(match_data: dict) -> Tuple[bool, List[str]]:
             if player.get("player_id") != pid or pid != f"espn_{player.get('espn_id')}":
                 errors.append(f"Invalid canonical participant identity {pid}")
         for issue in (match_data.get("meta") or {}).get("identity_issues") or []:
-            # A missing non-striker id is an optional-field gap, already counted
-            # in meta.missing_non_striker_deliveries; it is not a hard failure.
+            # The absence of a non-striker id is an optional-field gap, already
+            # counted in meta.missing_non_striker_deliveries. An id that was
+            # supplied but could not be resolved is a contradiction and fails.
             if (
                 isinstance(issue, dict)
                 and issue.get("reason") == "missing_object_id"
                 and issue.get("field") == "non_striker_id"
+                and issue.get("source_internal_id") in (None, "")
             ):
                 continue
             errors.append(f"Participant identity issue: {issue}")
