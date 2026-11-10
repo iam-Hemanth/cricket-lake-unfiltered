@@ -3,9 +3,11 @@
 
 The validator now treats two conditions as warnings instead of failures:
   * a per-ball commentary running total that disagrees while the innings'
-    final total reconciles exactly with the scorecard;
-  * a missing non-striker id (the field stays null and is already counted in
-    meta.missing_non_striker_deliveries).
+    final total reconciles exactly with the scorecard, capped at the largest
+    drift seen in the admitted corpus (50 runs);
+  * an absent non-striker id (no source id supplied; the field stays null and
+    is already counted in meta.missing_non_striker_deliveries). A supplied but
+    unresolved id remains a hard contradiction.
 
 A match is admitted only when validate_match_data() returns no errors. The
 original recorded errors are preserved in meta.validation_warnings, so the
