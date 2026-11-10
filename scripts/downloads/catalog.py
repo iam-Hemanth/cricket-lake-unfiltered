@@ -109,8 +109,11 @@ def main() -> int:
     (out / "downloads.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     shutil.copyfile(args.template, out / "index.html")
     calendar_template = Path(args.template).resolve().parent / "calendar.html"
-    if calendar_template.exists():
-        shutil.copyfile(calendar_template, out / "calendar.html")
+    if not calendar_template.exists():
+        # A missing calendar page must fail the build, not silently deploy a
+        # site whose Calendar link 404s.
+        raise SystemExit(f"calendar template missing: {calendar_template}")
+    shutil.copyfile(calendar_template, out / "calendar.html")
     fonts_src = Path(args.template).resolve().parent / "fonts"
     if fonts_src.is_dir():
         shutil.copytree(fonts_src, out / "fonts", dirs_exist_ok=True)

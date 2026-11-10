@@ -81,7 +81,12 @@ def main():
     # Determine match directories to reparse
     if args.match_ids or args.ids_file:
         if args.ids_file:
-            data = json.loads(Path(args.ids_file).read_text(encoding="utf-8"))
+            text = Path(args.ids_file).read_text(encoding="utf-8")
+            try:
+                data = json.loads(text)
+            except json.JSONDecodeError:
+                # The refetch workflow writes a plain-text id list.
+                data = [x.strip() for x in text.replace(",", "\n").splitlines() if x.strip()]
             target_mids = [str(x["match_id"]) if isinstance(x, dict) else str(x) for x in data]
         else:
             target_mids = [m.strip() for m in args.match_ids.split(",") if m.strip()]
@@ -100,7 +105,7 @@ def main():
     determinism_failures = 0
     determinism_checks = 0
     failed_matches: Dict[str, str] = {}
-    if args.match_ids:
+    if args.match_ids or args.ids_file:
         for requested in target_mids:
             if not (raw_dir / requested).is_dir():
                 failed_matches[requested] = "Requested raw match directory is missing"

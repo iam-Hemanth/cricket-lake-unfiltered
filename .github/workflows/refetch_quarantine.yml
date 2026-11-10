@@ -66,9 +66,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p recovered/matches
-          gh release download "$BATCH_TAG" \
-            -p "${{ github.event.inputs.source_asset }}" \
-            --dir recovered --clobber
+          for attempt in $(seq 1 10); do
+            if gh release download "$BATCH_TAG" \
+              -p "${{ github.event.inputs.source_asset }}" \
+              --dir recovered --clobber; then
+              break
+            fi
+            if [ "$attempt" -eq 10 ]; then
+              echo "::error::source batch download failed after 10 attempts"
+              exit 1
+            fi
+            delay=$((attempt * 15))
+            echo "download failed; retrying in ${delay}s (attempt ${attempt}/10)"
+            sleep "$delay"
+          done
           tar -xzf "recovered/${{ github.event.inputs.source_asset }}" -C recovered/matches
           echo "source files: $(find recovered/matches -name '*.json' | wc -l)"
 

@@ -47,7 +47,7 @@ TRANSIENT_ERROR_MARKERS = (
     "uncompleted source match state",
     "http 403", "http 429", "http 500", "http 502", "http 503", "http 504",
     "max retries", "timed out", "timeout", "connection", "circuit breaker",
-    "no failure record",
+    "no failure record", "deferred by max_matches cap",
 )
 
 
@@ -121,7 +121,10 @@ def compute_state(
             record.setdefault("last_error", "no failure record from extract job")
             record.pop("deferred", None)
         else:
-            record["last_error"] = "deferred by max_matches cap"
+            # Deferred means "not attempted this run": keep the recorded error
+            # so a transient failure is not reclassified as a data defect and
+            # abandoned at the validation limit.
+            record.setdefault("last_error", "deferred by max_matches cap")
             record["deferred"] = True
 
     for mid in list(retry):

@@ -112,7 +112,12 @@ jobs:
           AKAMAI_KEY: ${{ secrets.AKAMAI_KEY }}
         run: |
           set -euo pipefail
-          QUEUE=$(ls queue/**/*.json queue/*.json 2>/dev/null | head -1)
+          mapfile -t QUEUES < <(find queue -name '*.json' -type f)
+          if [ "${#QUEUES[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one queue JSON under queue/, found ${#QUEUES[@]}"
+            exit 1
+          fi
+          QUEUE="${QUEUES[0]}"
           OUT="out/chunk_${{ matrix.chunk.chunk }}"
           mkdir -p "$OUT" raw/chunk_${{ matrix.chunk.chunk }}
           FLAG=""

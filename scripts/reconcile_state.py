@@ -28,7 +28,10 @@ def _load(path: Path, default):
 
 def master_ids(index_path: Path) -> set[str]:
     if not index_path.exists():
-        return set()
+        # An empty index must never be read as "nothing is published": the
+        # caller would shrink known_ids to the abandoned set and requeue the
+        # whole lake. Fail before any state is written.
+        raise FileNotFoundError(f"master index not found: {index_path}")
     with open(index_path, newline="", encoding="utf-8") as f:
         return {str(row["match_id"]) for row in csv.DictReader(f) if row.get("match_id")}
 
@@ -44,8 +47,9 @@ def delta_ids(deltas_dir: Path) -> set[str]:
                         stem = name[:-5]
                         if stem.isdigit():
                             ids.add(stem)
-        except (tarfile.TarError, OSError):
-            continue
+        except (tarfile.TarError, OSError) as exc:
+            # A partial view would strand every id in the unreadable window.
+            raise RuntimeError(f"cannot read delta archive {archive}: {exc}") from exc
     return ids
 
 
@@ -75,6 +79,11 @@ def reconcile(
         record = retry.get(mid) or {"attempts": 0, "first_seen": now}
         record.setdefault("first_seen", now)
         record["manifest"] = record.get("manifest") or {"match_id": mid}
+        if record.get("last_error"):
+            record.setdefault("previous_error", record["last_error"])
+        # A stranded id has not been attempted under the drift diagnosis;
+        # reset the counter so prior failures do not abandon it immediately.
+        record["attempts"] = 0
         record["last_error"] = (
             "known but missing from master index and every delta archive "
             "(state drift)"

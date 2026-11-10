@@ -22,7 +22,9 @@ permissions:
   actions: write
 
 concurrency:
-  group: repair-state
+  # Share update_lake's group: both jobs download, edit and re-upload
+  # lake-state, so they must never overlap (last writer would win).
+  group: update-lake
   cancel-in-progress: false
 
 jobs:

@@ -19,6 +19,11 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  # Batch assets are overwritten by tag; overlapping runs must not race.
+  group: parallel-extract
+  cancel-in-progress: false
+
 jobs:
   generate_matrix:
     runs-on: ubuntu-latest
