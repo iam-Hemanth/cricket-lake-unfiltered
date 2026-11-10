@@ -1,4 +1,4 @@
-# Lake handoff — 9 Nov 2026 (source-gap tier complete; dated calendar live)
+# Lake handoff — 10 Nov 2026 (audit fixes; dated calendar live)
 
 This is the handoff for **this repository only** (`cricket-lake-unfiltered`).
 The CricStats app/API lives in a different repo (`/Users/hemanth/cstest`) and
@@ -8,8 +8,9 @@ has its own handoff; do not apply its runbooks, ports or database rules here.
 
 - Catalog: https://iam-hemanth.github.io/cricket-lake-unfiltered/
 - Calendar: https://iam-hemanth.github.io/cricket-lake-unfiltered/calendar.html
-- **18,381 matches / 3.0 GB** in the master (run 42658234882) and the catalog
-  (run 42665379973). The date range is **2001-12-19 to 2026-11-09**.
+- **18,381 matches / 3.0 GB** in the master (run 42658234882); the catalog is
+  **18,384** (run 42756938088) with the three delta matches below. The date
+  range is **2001-12-19 to 2026-11-09**.
 - **1,289 warning-tier** and **230 source-gap-tier** matches are included; their
   caveats are in `meta.validation_warnings` (source-gap files also carry
   `meta.source_gap`). **650 quarantined** remain excluded.
@@ -18,7 +19,7 @@ has its own handoff; do not apply its runbooks, ports or database rules here.
 - The dated calendar lists every published match by year, month and day. Each
   match opens its innings and validation tier and downloads as a single
   `m/<match_id>.json.gz`, decompressed in the browser. The per-match store is
-  18,381 files / 275 MB, rebuilt with the catalog.
+  18,384 files / 275 MB, rebuilt with the catalog.
 
 ## What ran (09 Nov)
 
@@ -43,6 +44,34 @@ has its own handoff; do not apply its runbooks, ports or database rules here.
    preflight now shares the master and deltas as one `source-archives`
    artifact; 20 shards pulling the 233 MB master from the release CDN
    concurrently had returned HTTP 500s on random shards.
+
+## 10 Nov — audit fixes and policy clarification
+
+- The catalog is now **18,384** (run 42756938088): master 18,381 plus the three
+  delta matches 1552531, 1561256, 1561257. The dated calendar and the
+  `m/<match_id>.json.gz` store are rebuilt at the same count.
+- Calendar detail scores now fall back to the delivery stream for schema 3.0
+  records (16,419 of 18,384); previously only `innings[].source_scorecard`
+  was read, so legacy cards showed dashes.
+- The catalog prune runs only after a successful Pages deploy; a failed deploy
+  no longer leaves the live catalog pointing at deleted zips. The deploy
+  timeout is 20 minutes for the 18k-file store.
+- Validator: a non-striker issue is exempt only when no source id was supplied
+  (a supplied but unresolved id is a contradiction); commentary drift is
+  capped at 50 runs when the innings reconciles (admitted corpus max 46).
+  Revalidation over the 2,169 recovery batch: **1,288 admitted / 881 fail**
+  (was 1,289/880). Match **1410220** (County Championship, 2024-05-17, 13
+  supplied-id issues) moves to review; the other 1,288 warn-tier matches are
+  unchanged.
+- Backfill uses a second-resolution stamp plus run id, caps the matrix at 256
+  jobs, and publishes finished chunks. The per-match store ingests deltas
+  newest-first, `consolidate.py` tolerates an over without `deliveries`, and
+  the 8 GiB preflight warns instead of deadlocking.
+- State: a deferred retry keeps its error, `reconcile_state` aborts on an
+  incomplete published view, `repair_state` shares `update_lake`'s concurrency,
+  and `refetch_quarantine` retries the source-batch download with backoff.
+- Expected next consolidate: 18,381 + 3 delta - 1 invalid = **18,383**;
+  warning **1,288**; source-gap **230**; quarantined **650**.
 
 ## Next steps
 
