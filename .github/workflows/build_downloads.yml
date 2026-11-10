@@ -79,9 +79,12 @@ jobs:
           previous=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${SLICE_TAG}" \
             --jq '[.assets[].size] | add // 0' 2>/dev/null || echo 0)
           echo "Previous release assets: ${previous} bytes (budget ${MAX_TOTAL_BYTES})"
+          # The budget applies to the catalog being published, and the build
+          # enforces it in catalog.py. Do not hard-fail on the previous size:
+          # a release that grew past the budget would otherwise block forever,
+          # because the prune only runs after a successful deploy.
           if [ "${previous:-0}" -gt "${MAX_TOTAL_BYTES}" ]; then
-            echo "::error::Previous catalog exceeds the 8 GiB budget; prune slices before rebuilding."
-            exit 1
+            echo "::warning::Previous catalog exceeds the 8 GiB budget; this run must shrink it."
           fi
 
       - name: Download master, deltas and release metadata

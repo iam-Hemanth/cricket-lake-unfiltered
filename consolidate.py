@@ -183,7 +183,7 @@ def scan_and_consolidate(
 
         # Field presence is coverage, not an accuracy or tracking provenance claim.
         match_ball_count = 0
-        non_delivery=sum(source_only_timed_out([d for ov in inn.get('overs') or [] for d in ov['deliveries']],
+        non_delivery=sum(source_only_timed_out([d for ov in inn.get('overs') or [] for d in ov.get('deliveries') or []],
                          inn.get('source_scorecard') or {}) for inn in data.get('innings') or [])
         source_only_timed_out_wickets+=non_delivery
         total_wickets += match_wicket_count+non_delivery

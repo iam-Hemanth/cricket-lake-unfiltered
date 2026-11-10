@@ -65,6 +65,11 @@ jobs:
               ids = ids[:limit]
           chunk = int(os.environ["CHUNK"])
           chunks = math.ceil(len(ids) / chunk) if ids else 0
+          if chunks > 256:
+              raise SystemExit(
+                  f"{len(ids)} ids -> {chunks} chunks exceeds GitHub's 256-job matrix limit; "
+                  "raise chunk_size or split the queue"
+              )
           matrix = [{"chunk": i, "size": chunk} for i in range(chunks)]
           with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
               fh.write(f"matrix={json.dumps(matrix)}\n")
@@ -138,7 +143,10 @@ jobs:
 
   publish:
     needs: [plan, extract]
-    if: always() && needs.extract.result == 'success'
+    # Publish whatever chunks finished. One failed chunk must not discard the
+    # matches already extracted by the others; the batch name still sorts
+    # under matches_batch_recovery_*.
+    if: always() && needs.plan.result == 'success' && needs.plan.outputs.total != '0'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -156,7 +164,7 @@ jobs:
           for t in chunks/*.tar.gz; do tar -xzf "$t" -C merged; done
           COUNT=$(find merged -name '*.json' | wc -l | tr -d ' ')
           echo "recovered: $COUNT"
-          STAMP=$(date -u +%Y%m%dT%H)
+          STAMP="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID}"
           tar -czf "matches_batch_recovery_${STAMP}.tar.gz" -C merged .
           gh release view data-unfiltered-batches >/dev/null 2>&1 || \
             gh release create data-unfiltered-batches --title "Batch archives" --notes "Recovery and scheduled batches." --latest=false

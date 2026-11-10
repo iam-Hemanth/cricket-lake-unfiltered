@@ -121,12 +121,15 @@ def main() -> int:
                         "GitHub Pages allows 1 GB, so split the store before publishing"
                     )
 
-    ingest(args.master_tar)
+    # Newest source wins: deltas are append-only windows, so ingest them from
+    # newest to oldest and let the master fill the remaining ids. Ingesting the
+    # master first kept a stale copy for matches a delta had republished.
     if args.deltas_dir and args.deltas_dir.is_dir():
-        for path in sorted(args.deltas_dir.glob("lake_delta_*.tar.gz")):
+        for path in sorted(args.deltas_dir.glob("lake_delta_*.tar.gz"), reverse=True):
             if args.limit and len(written) >= args.limit:
                 break
             ingest(path)
+    ingest(args.master_tar)
 
     for m in matches:
         m["x"] = 1 if m["i"] in written else 0
