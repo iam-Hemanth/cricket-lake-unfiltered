@@ -27,6 +27,7 @@ EXPORT_FIELDS = [
     "wagon_wheel_balls", "pitch_line_balls", "shot_type_balls", "validation_status",
     "level", "format_family", "year", "competition_id", "competition_name",
     "competition_type", "team_ids", "published_at",
+    "match_stage", "match_number", "match_group", "match_title",
 ]
 
 COMPETITION_TYPE_LABELS = {
@@ -259,6 +260,10 @@ def record_from_match_json(match_id: str, path: Path) -> dict:
         "toss_winner": toss.get("winner") or "", "toss_decision": toss.get("decision") or "",
         "venue": meta.get("venue") or "", "city": meta.get("city") or "",
         "venue_country": meta.get("venue_country") or "",
+        "match_stage": meta.get("match_stage") or "",
+        "match_number": meta.get("match_number") if meta.get("match_number") is not None else "",
+        "match_group": meta.get("match_group") or "",
+        "match_title": meta.get("match_title") or "",
         **metrics,
     }
 

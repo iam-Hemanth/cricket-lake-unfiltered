@@ -96,6 +96,14 @@ jobs:
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download"
           gh release view data-unfiltered-deltas --json assets > artifacts/delta_assets.json
           gh release view data-unfiltered-batches --json assets > artifacts/batches_assets.json
+          STAGE_INDEX=$(jq -r '.assets[].name | select(startswith("stage_index_") and endswith(".json.gz"))' artifacts/batches_assets.json | sort | tail -1)
+          if [ -n "$STAGE_INDEX" ]; then
+            if ! curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+              -o artifacts/stage_index.json.gz "$base/data-unfiltered-batches/$STAGE_INDEX"; then
+              echo "::warning::could not download $STAGE_INDEX; stage fields fall back to the master JSON"
+              rm -f artifacts/stage_index.json.gz
+            fi
+          fi
           for name in cricket_lake_unfiltered_master.tar.gz matches_index.csv lake_manifest.json; do
             curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
               -o "artifacts/$name" "$base/data-unfiltered-master/$name"
@@ -111,6 +119,8 @@ jobs:
       - name: Normalize metadata and plan slices
         run: |
           set -euo pipefail
+          STAGE_ARG=()
+          if [ -s artifacts/stage_index.json.gz ]; then STAGE_ARG=(--stage-index artifacts/stage_index.json.gz); fi
           python -m scripts.downloads.prepare \
             --master-tar artifacts/cricket_lake_unfiltered_master.tar.gz \
             --master-index artifacts/matches_index.csv \
@@ -120,7 +130,8 @@ jobs:
             --batches-assets artifacts/batches_assets.json \
             --config-dir downloads/config \
             --workdir download_work \
-            --out download_plan
+            --out download_plan \
+            "${STAGE_ARG[@]}"
 
       - name: Upload plan
         uses: actions/upload-artifact@v4
@@ -193,13 +204,16 @@ jobs:
       - name: Build shard ${{ matrix.shard }}
         run: |
           set -euo pipefail
+          STAGE_ARG=()
+          if [ -s artifacts/stage_index.json.gz ]; then STAGE_ARG=(--stage-index artifacts/stage_index.json.gz); fi
           python -m scripts.downloads.build_shard \
             --plan-dir download_plan \
             --shard ${{ matrix.shard }} \
             --master-tar artifacts/cricket_lake_unfiltered_master.tar.gz \
             --deltas-dir artifacts/deltas \
             --workdir download_work \
-            --out downloads_out
+            --out downloads_out \
+            "${STAGE_ARG[@]}"
 
       - name: Upload zips to the slice release
         if: ${{ github.event.inputs.dry_run != 'true' }}
@@ -281,12 +295,15 @@ jobs:
       - name: Build calendar and per-match downloads
         run: |
           set -euo pipefail
+          STAGE_ARG=()
+          if [ -s artifacts/stage_index.json.gz ]; then STAGE_ARG=(--stage-index artifacts/stage_index.json.gz); fi
           python -m scripts.downloads.calendar \
             --plan-dir download_plan \
             --master-tar artifacts/cricket_lake_unfiltered_master.tar.gz \
             --deltas-dir artifacts/deltas \
             --fragments-dir fragments \
-            --out catalog_out
+            --out catalog_out \
+            "${STAGE_ARG[@]}"
 
       - name: Point catalog links at release assets
         run: |

@@ -105,20 +105,31 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "description": "Knockout or special stage derived from the ESPN match title/finalType, e.g. Final, Semi Final, Quarter Final, Qualifier 1, Eliminator, Play-off, Super Eights. Null for ordinary league or bilateral matches."
         },
         "match_number": {
           "type": [
             "integer",
             "string",
             "null"
-          ]
+          ],
+          "minimum": 1,
+          "description": "Ordinal match number parsed from the ESPN title (22 for '22nd Match', 2 for '2nd Final', 1 for 'Qualifier 1'). Null when the title records no ordinal."
         },
         "match_group": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "description": "Group label parsed from the ESPN title, e.g. A, B, 2, Elite A, Central & West. Null for non-group matches."
+        },
+        "match_title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Raw ESPN match title retained for audit (for example '3rd place play-off' or '49th Match, Super Eights, Group 2')."
         },
         "balls_per_over": {
           "type": "integer",

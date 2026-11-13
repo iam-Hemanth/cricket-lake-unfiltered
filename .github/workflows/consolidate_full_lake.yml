@@ -81,6 +81,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Apply ESPN stage index
+        run: |
+          set -euo pipefail
+          mkdir -p stage_index
+          if gh release view data-unfiltered-batches >/dev/null 2>&1 \
+             && gh release download data-unfiltered-batches -p "stage_index_*.json.gz" --dir stage_index 2>/dev/null; then
+            shopt -s nullglob
+            indexes=(stage_index/stage_index_*.json.gz)
+            if [ "${#indexes[@]}" -gt 0 ]; then
+              INDEX=$(printf '%s\n' "${indexes[@]}" | sort | tail -1)
+              python scripts/apply_stage_index.py --matches-dir master_all_matches --index "$INDEX"
+            else
+              echo "No stage index asset; keeping constructor-derived stage fields."
+            fi
+          else
+            echo "No stage index asset; keeping constructor-derived stage fields."
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Consolidate Master Lake & Generate Manifest
         run: |
           # --published-only keeps the manifest in sync with the catalog: the

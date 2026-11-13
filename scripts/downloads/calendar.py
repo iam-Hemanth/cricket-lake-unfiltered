@@ -20,6 +20,8 @@ import tarfile
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from src.stage import apply_stage_payload, load_stage_index
+
 MAX_MATCH_BYTES = 700 * 1024 * 1024
 
 # The source keeps fine-grained format codes; the calendar groups them the way
@@ -56,6 +58,7 @@ def main() -> int:
     parser.add_argument("--master-tar", required=True, type=Path)
     parser.add_argument("--deltas-dir", type=Path, default=None)
     parser.add_argument("--fragments-dir", type=Path, default=None)
+    parser.add_argument("--stage-index", type=Path, default=None, help="Optional ESPN stage index for per-match files")
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--limit", type=int, default=0, help="Only write the first N match files (tests)")
     args = parser.parse_args()
@@ -69,6 +72,7 @@ def main() -> int:
             for item in load_json(path, []):
                 fragments[item.get("id")] = item
     slice_for = smallest_slices(slices, fragments)
+    stage_index = load_stage_index(args.stage_index) if args.stage_index else {}
 
     matches = []
     for row in records:
@@ -109,6 +113,9 @@ def main() -> int:
                 if not mid.isdigit() or mid not in wanted or mid in written:
                     continue
                 payload = tar.extractfile(member).read()
+                entry = stage_index.get(mid)
+                if entry:
+                    payload = apply_stage_payload(payload, entry)
                 blob = gzip.compress(payload, compresslevel=6, mtime=0)
                 (out_m / f"{mid}.json.gz").write_bytes(blob)
                 written.add(mid)

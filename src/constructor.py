@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
 from src import hundred, classification, source_facts
+from src.stage import derive_stage
 
 from src.participants import build_participant_registry, extract_participation_events, confirmed_lineups, _id
 
@@ -492,9 +493,7 @@ def construct_match_v3(
             "city": city,
             "gender": "male",
             "day_night": "day/night" if match_info.get("dayNight") else "day",
-            "match_stage": (match_info.get("event") or {}).get("stage"),
-            "match_number": (match_info.get("event") or {}).get("matchNumber"),
-            "match_group": (match_info.get("event") or {}).get("group"),
+            **derive_stage(match_info),
             "balls_per_over": balls_per_over,
             "tactical_coverage": tactical_coverage,
             "normalization_notes": normalization_notes,

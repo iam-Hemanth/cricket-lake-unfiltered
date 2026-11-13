@@ -30,6 +30,19 @@ class CatalogContractTests(unittest.TestCase):
             self.assertNotIn('pitch_map_balls',row)
             self.assertIn('pitch_line_balls',row)
 
+    def test_catalog_exposes_espn_stage_fields(self):
+        raw=details();raw['match'].update(title='2nd Semi-Final',finalType=3)
+        m,error=construct_match_v3('100',raw,{1:[ball()]},{},{},{})
+        self.assertIsNone(error)
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);source=root/'in';source.mkdir();(source/'100.json').write_text(json.dumps(m))
+            generate_catalog(source,root/'out')
+            row=next(csv.DictReader((root/'out/matches_index.csv').open()))
+            self.assertEqual(row['match_stage'],'Semi Final')
+            self.assertEqual(row['match_number'],'2')
+            self.assertEqual(row['match_group'],'')
+            self.assertEqual(row['match_title'],'2nd Semi-Final')
+
     def test_invalid_candidate_is_not_repackaged_by_catalog(self):
         m,error=construct_match_v3('100',details(),{1:[ball()]},{},{},{})
         self.assertIsNone(error);m['players'].pop('espn_1012')

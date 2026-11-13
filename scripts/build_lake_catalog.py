@@ -30,7 +30,7 @@ def _wicket_count(deliveries, allow_unknown: bool = False) -> int:
             if str(wicket.get("kind") or "").strip().lower() not in NON_DISMISSAL_KINDS
         )
 
-CATALOG_FIELDS=['filename', 'match_id', 'date', 'format', 'format_bucket', 'schema_version', 'record_class', 'playing_format', 'international_status', 'classification_status', 'record_stats_eligible', 'validation_status', 'gender', 'competition', 'season', 'team1', 'team2', 'winner', 'result', 'toss_winner', 'toss_decision', 'venue', 'city', 'venue_country', 'total_balls', 'total_runs', 'total_wickets', 'wagon_wheel_balls', 'pitch_line_balls', 'shot_type_balls']
+CATALOG_FIELDS=['filename', 'match_id', 'date', 'format', 'format_bucket', 'schema_version', 'record_class', 'playing_format', 'international_status', 'classification_status', 'record_stats_eligible', 'validation_status', 'gender', 'competition', 'season', 'team1', 'team2', 'winner', 'result', 'toss_winner', 'toss_decision', 'venue', 'city', 'venue_country', 'total_balls', 'total_runs', 'total_wickets', 'wagon_wheel_balls', 'pitch_line_balls', 'shot_type_balls', 'match_stage', 'match_number', 'match_group', 'match_title']
 
 
 
@@ -157,7 +157,11 @@ def generate_catalog(matches_dir: Path, output_dir: Path, archive_prefix: str = 
             "total_wickets": total_wkts,
             "wagon_wheel_balls": wagon_balls,
             "pitch_line_balls": pitch_balls,
-            "shot_type_balls": shot_balls
+            "shot_type_balls": shot_balls,
+            "match_stage": meta.get("match_stage") or "",
+            "match_number": meta.get("match_number") if meta.get("match_number") is not None else "",
+            "match_group": meta.get("match_group") or "",
+            "match_title": meta.get("match_title") or "",
         })
 
     # Sort rows chronologically
@@ -197,10 +201,10 @@ def generate_catalog(matches_dir: Path, output_dir: Path, archive_prefix: str = 
         f.write("DATASET STRUCTURE & HOW TO USE:\n")
         f.write("-" * 120 + "\n")
         f.write("1. Each match is stored as an independent JSON file named '<match_id>.json'.\n")
-        f.write("2. 'matches_index.csv' contains a tabular index of all matches with dates, teams, venues, and scores.\n")
+        f.write("2. 'matches_index.csv' contains a tabular index of all matches with dates, teams, venues, scores, and stage fields (match_stage, match_number, match_group, match_title).\n")
         f.write("   - Load directly with pandas: pd.read_csv('matches_index.csv')\n")
         f.write("3. Key JSON fields in every file:\n")
-        f.write("   - meta       : Competition, format, season, dates, venue, balls_per_over, tactical_coverage\n")
+        f.write("   - meta       : Competition, format, season, dates, venue, balls_per_over, tactical_coverage, match_stage/match_number/match_group\n")
         f.write("   - outcome    : Winner, margin (win_by_runs / win_by_wickets), eliminator\n")
         f.write("   - toss       : Toss winner and decision ('bat' or 'field')\n")
         f.write("   - playing_xi : Source-confirmed original lineups; see playing_xi_status and players registry\n")

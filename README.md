@@ -19,6 +19,8 @@ This dataset expands beyond core international and franchise competitions to enc
   - Pitch map pitch line & length (`pitch_line`, `pitch_length`)
   - Shot classification (`shot_type`, `shot_control`)
   - Canonical cross-source player mapping (`cricsheet_id` + `espn_id`)
+- **Stage Metadata**:
+  - `meta.match_stage` / `match_number` / `match_group` / raw `match_title`, derived from ESPN match titles and `finalType` (`Final`, `Semi Final`, `Qualifier 1`, `Eliminator`, `Play-off`, `Super Eights`, group labels). No Cricsheet input is used for these fields.
 
 ---
 

@@ -24,6 +24,7 @@ from .metadata import (
     write_records,
 )
 from .slices import GROUP_DESCRIPTIONS, GROUP_ORDER, build_slices
+from src.stage import apply_stage_index_to_dir
 
 
 def _now(value: str | None) -> datetime:
@@ -40,6 +41,7 @@ def main() -> int:
     parser.add_argument("--deltas-dir", required=True)
     parser.add_argument("--delta-assets", default=None)
     parser.add_argument("--batches-assets", default=None)
+    parser.add_argument("--stage-index", default=None, help="Optional ESPN stage index to apply after delta overlay")
     parser.add_argument("--recovery-time", default="2026-10-24T20:24:00Z")
     parser.add_argument("--config-dir", default="downloads/config")
     parser.add_argument("--workdir", default="download_work")
@@ -59,6 +61,10 @@ def main() -> int:
     times = asset_times(Path(args.delta_assets) if args.delta_assets else None)
     print("Overlaying delta archives...")
     delta_published = overlay_deltas(Path(args.deltas_dir), matches_dir, times)
+    if args.stage_index:
+        print("Applying ESPN stage index...")
+        stats = apply_stage_index_to_dir(matches_dir, args.stage_index)
+        print(f"Stage index: {stats}")
     recovery = recovery_time(Path(args.batches_assets) if args.batches_assets else None, args.recovery_time)
 
     comps = CompetitionRegistry(load_json(Path(args.config_dir) / "competitions.json", []))

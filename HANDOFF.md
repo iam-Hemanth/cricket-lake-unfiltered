@@ -73,6 +73,13 @@ has its own handoff; do not apply its runbooks, ports or database rules here.
 - Expected next consolidate: 18,381 + 3 delta - 1 invalid = **18,383**;
   warning **1,288**; source-gap **230**; quarantined **650**.
 
+## 13 Nov — ESPN stage metadata
+
+- `meta.match_stage`, `match_number`, `match_group` and raw `match_title` are now derived from the ESPN `match.title` / `match.finalType` pair in `src/stage.py`; the old `match.event.*` reads never produced values because ESPN has no `event` object.
+- Historical backfill: run `Build ESPN stage index` (`build_stage_index.yml`) once. It scans the unfiltered and curated `raw_batch_*.tar.gz` assets, writes `stage_index_<stamp>.json.gz` to `data-unfiltered-batches`, and reports ids with no raw payload.
+- `consolidate_full_lake.yml` applies the newest stage index after curated and delta inputs; `prepare.py`, `build_shard.py` and `calendar.py` apply it after their delta overlays so master JSON, slice CSVs and the per-match store agree.
+- The only expected raw gap is the ~440 published matches first extracted by the 6-hourly deltas after 6 Oct 2026; they keep null stage until a metadata refetch or re-extraction. No Cricsheet input is used for stage fields.
+
 ## Next steps
 
 1. No repair is pending: every quarantined match was re-fetched today and still

@@ -1,0 +1,77 @@
+name: Build ESPN stage index
+
+# One-off backfill: derive match_stage / match_number / match_group / match_title
+# from the stored ESPN raw scorecards and publish the small index used by
+# consolidate and the download catalog builder. No Cricsheet input is used.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stage-index
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download published ids
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts raw_assets
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+            -o artifacts/matches_index.csv \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/data-unfiltered-master/matches_index.csv"
+
+      - name: Download ESPN raw batches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p raw_assets/unfiltered raw_assets/curated
+          gh release download data-unfiltered-batches -p "raw_batch_*.tar.gz" --dir raw_assets/unfiltered
+          gh release download data-v2-batches --repo iam-Hemanth/cricket-extractor \
+            -p "raw_batch_*.tar.gz" --dir raw_assets/curated
+          echo "raw assets: $(find raw_assets -name 'raw_batch_*.tar.gz' | wc -l), $(du -sh raw_assets | cut -f1)"
+
+      - name: Build stage index
+        run: |
+          set -euo pipefail
+          STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+          ARGS=()
+          while IFS= read -r path; do ARGS+=(--tar "$path"); done < <(find raw_assets -name 'raw_batch_*.tar.gz' | sort)
+          python scripts/build_stage_index.py \
+            "${ARGS[@]}" \
+            --ids-file artifacts/matches_index.csv \
+            --output "stage_index_${STAMP}.json.gz" \
+            --summary artifacts/stage_index_summary.json
+          echo "ASSET=stage_index_${STAMP}.json.gz" >> "$GITHUB_ENV"
+
+      - name: Publish stage index
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload data-unfiltered-batches "$ASSET" --clobber
+
+      - name: Summarize
+        run: |
+          cat artifacts/stage_index_summary.json
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/stage_index_summary.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage-index-summary
+          path: artifacts/stage_index_summary.json
+          retention-days: 30
