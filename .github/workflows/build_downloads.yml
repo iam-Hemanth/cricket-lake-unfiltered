@@ -26,7 +26,8 @@ on:
         type: boolean
         default: false
   schedule:
-    # After the nightly consolidate (02:30 UTC) with a buffer for delays.
+    # Fallback refresh: the normal path is a dispatch from
+    # consolidate_full_lake.yml right after each master rebuild.
     - cron: '30 4 * * *'
 
 permissions:

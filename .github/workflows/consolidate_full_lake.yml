@@ -2,14 +2,15 @@ name: Consolidate Full 18,400+ Match Unfiltered Lake
 
 on:
   workflow_dispatch:
-  # Nightly rebuild: folds every batch (including recovery batches), the
-  # curated lake, and every 6-hourly delta window into the master release.
-  # Deltas are append-only and retained, so a rebuild never loses matches.
+  # Primary path: update_lake.yml dispatches this job as soon as it publishes
+  # a delta, so the master follows the 6-hourly windows. The nightly run below
+  # is a safety rebuild. Deltas are append-only, so a rebuild never loses matches.
   schedule:
     - cron: '30 2 * * *'
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: consolidate-lake
@@ -139,3 +140,11 @@ jobs:
             master_unfiltered_lake/lake_manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger download catalog rebuild
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run build_downloads.yml
+          echo "Queued build_downloads.yml after master rebuild"

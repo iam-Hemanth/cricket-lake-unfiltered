@@ -35,8 +35,9 @@ This dataset expands beyond core international and franchise competitions to enc
 ## 🚀 Workflows
 
 - **`parallel_extract_unfiltered.yml`**: Parallel matrix extractor running 52 batches (250 matches each) with 20 concurrent runners on GitHub Actions.
-- **`consolidate_full_lake.yml`**: Master aggregator merging all 52 delta batches with the 5,483 curated matches from `cricket-extractor`.
-- **`build_downloads.yml`**: Builds the Cricsheet-style slice catalog and publishes the zips to the rolling `download-slices` release plus the catalog page on GitHub Pages.
+- **`update_lake.yml`**: 6-hourly discovery and extraction; publishes an append-only delta window and dispatches consolidation.
+- **`consolidate_full_lake.yml`**: Master aggregator merging all 52 delta batches with the 5,483 curated matches from `cricket-extractor`; runs on every published delta plus a nightly safety rebuild.
+- **`build_downloads.yml`**: Builds the Cricsheet-style slice catalog and publishes the zips to the rolling `download-slices` release plus the catalog page on GitHub Pages; dispatched by consolidation with a nightly fallback.
 
 ## Downloads
 
@@ -45,8 +46,9 @@ The slice catalog is published at
 Each slice is a zip containing match JSON, a filtered `matches_index.csv`, a
 slice `lake_manifest.json`, and a slice README. Zips are assets on the rolling
 `download-slices` release; verify them against `checksums.txt`. The catalog is
-rebuilt nightly after the consolidate job, and no third-party storage account
-or credentials are involved.
+rebuilt after each consolidation, which follows every published 6-hourly delta;
+a nightly fallback run covers missed dispatches, and no third-party storage
+account or credentials are involved.
 
 A dated **calendar view** at `calendar.html` lists every published match by
 year, month and day. Pick a day, open a match to check its innings and

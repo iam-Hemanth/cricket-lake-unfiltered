@@ -89,10 +89,10 @@ has its own handoff; do not apply its runbooks, ports or database rules here.
    1559692) were never in the recovery batch and remain missing. The four older
    ids 1554097/1554098 (women's) and 1558435/1558599 (running-score only) still
    need source data.
-3. The nightly consolidate (02:30 UTC) and catalog (04:30 UTC) fold new deltas
-   into the master and refresh the per-match store. A delta landing between the
-   two runs makes the catalog one or two matches ahead of the master until the
-   next consolidate.
+3. `update_lake.yml` dispatches consolidation as soon as it publishes a delta,
+   and consolidation dispatches the catalog rebuild, so a delta is folded and
+   published within roughly half an hour. The 02:30/04:30 UTC crons remain as
+   safety nets because GitHub can delay scheduled runs by several hours.
 
 ## Rules specific to this repo
 

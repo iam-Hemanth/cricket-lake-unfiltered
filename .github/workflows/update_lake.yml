@@ -11,6 +11,8 @@ name: Update lake (6-hourly)
 #     duplicated or manual run never double-extracts.
 #   * extraction is chunked so a large backlog fans out instead of timing out.
 #   * publishing is a single job -> no matrix jobs racing on the same release tag.
+#   * a published delta dispatches consolidate_full_lake.yml, which in turn
+#     dispatches the catalog rebuild; freshness no longer depends on daily crons.
 #   * the state commit keeps the repo active, which stops GitHub from disabling
 #     this schedule after 60 days of inactivity.
 
@@ -36,6 +38,7 @@ on:
 permissions:
   contents: write
   issues: write
+  actions: write
 
 concurrency:
   group: update-lake
@@ -342,6 +345,15 @@ jobs:
             gh release create "$STATE_TAG" --title "Pipeline state" \
               --notes "Machine state for update_lake.yml. Do not delete." --latest=false
           gh release upload "$STATE_TAG" .state/known_ids.json .state/lake_state.json --clobber
+
+      - name: Trigger consolidation
+        if: env.HAS_DELTA == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run consolidate_full_lake.yml
+          echo "Queued consolidate_full_lake.yml for delta $STAMP"
 
 
   # ------------------------------------------------------------------ notify
