@@ -1,9 +1,11 @@
-"""ESPN-backed match stage metadata.
+"""ESPN-backed match stage, award and series metadata.
 
 The ESPN details payload carries the round in ``match.title`` and
-``match.finalType``; it has no ``event`` object (that shape belongs to
-Cricsheet). This module is the single derivation used by the constructor and
-the offline stage-index backfill so both emit identical values.
+``match.finalType``, the match and series awards in ``content.supportInfo``,
+and the series id in ``match.series``; it has no ``event`` object (that shape
+belongs to Cricsheet). This module is the single derivation used by the
+constructor and the offline stage-index backfill so both emit identical
+values.
 """
 from __future__ import annotations
 
@@ -14,6 +16,24 @@ from pathlib import Path
 from typing import Iterable
 
 STAGE_FIELDS = ("match_stage", "match_number", "match_group", "match_title")
+PLAYER_OF_MATCH_FIELDS = (
+    "player_of_match_id",
+    "player_of_match_name",
+    "player_of_match_team",
+)
+PLAYER_OF_SERIES_FIELDS = (
+    "player_of_series_id",
+    "player_of_series_name",
+    "player_of_series_team",
+    "player_of_series_type",
+)
+SERIES_FIELDS = ("source_series_id",)
+META_FIELDS = (
+    STAGE_FIELDS
+    + PLAYER_OF_MATCH_FIELDS
+    + PLAYER_OF_SERIES_FIELDS
+    + SERIES_FIELDS
+)
 _SKIP_JSON_NAMES = {"failed_matches.json", "manifest.json", "lake_manifest.json", "meta.json"}
 
 _FINAL_TYPE_STAGE = {
@@ -217,6 +237,113 @@ def unwrap_match_payload(payload):
     return payload
 
 
+def _as_int(value):
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_text(value):
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def derive_player_of_match(content) -> dict:
+    """Return the Player of the Match fields from an ESPN ``content`` object.
+
+    The award lives at ``supportInfo.mostValuedPlayerOfTheMatch`` with the
+    player and team objects. The player id recorded is the ESPN ``objectId``,
+    which is the served player identity; ``id`` is only a fallback. Absent or
+    malformed data yields all-null fields; nothing is inferred.
+    """
+    info = content if isinstance(content, dict) else {}
+    support = info.get("supportInfo")
+    if not isinstance(support, dict):
+        support = {}
+    award = support.get("mostValuedPlayerOfTheMatch")
+    if not isinstance(award, dict):
+        return {field: None for field in PLAYER_OF_MATCH_FIELDS}
+    player = award.get("player")
+    if not isinstance(player, dict):
+        player = {}
+    team = award.get("team")
+    if not isinstance(team, dict):
+        team = {}
+    player_id = _as_int(player.get("objectId"))
+    if player_id is None:
+        player_id = _as_int(player.get("id"))
+    player_name = _as_text(player.get("name")) or _as_text(player.get("longName"))
+    team_name = _as_text(team.get("name")) or _as_text(team.get("longName"))
+    if player_id is None and player_name is None:
+        return {field: None for field in PLAYER_OF_MATCH_FIELDS}
+    return {
+        "player_of_match_id": player_id,
+        "player_of_match_name": player_name,
+        "player_of_match_team": team_name,
+    }
+
+
+_SERIES_AWARD_TYPES = ("PLAYER_OF_SERIES", "PLAYER_OF_TOURNAMENT", "PLAYER_OF_THE_TOURNAMENT")
+
+
+def derive_player_of_series(content) -> dict:
+    """Return the Player of the Series/Tournament fields from an ESPN content object.
+
+    The award lives in ``supportInfo.playersOfTheSeries`` as a list of
+    ``{type, player, team}`` entries. A ``PLAYER_OF_SERIES`` entry wins over a
+    tournament entry; the recorded type is preserved. Absent data yields
+    all-null fields.
+    """
+    info = content if isinstance(content, dict) else {}
+    support = info.get("supportInfo")
+    if not isinstance(support, dict):
+        support = {}
+    awards = support.get("playersOfTheSeries")
+    if not isinstance(awards, list):
+        return {field: None for field in PLAYER_OF_SERIES_FIELDS}
+    for wanted in _SERIES_AWARD_TYPES:
+        for award in awards:
+            if not isinstance(award, dict):
+                continue
+            award_type = _as_text(award.get("type"))
+            if award_type != wanted:
+                continue
+            player = award.get("player")
+            if not isinstance(player, dict):
+                player = {}
+            team = award.get("team")
+            if not isinstance(team, dict):
+                team = {}
+            player_id = _as_int(player.get("objectId"))
+            if player_id is None:
+                player_id = _as_int(player.get("id"))
+            player_name = _as_text(player.get("name")) or _as_text(player.get("longName"))
+            if player_id is None and player_name is None:
+                continue
+            return {
+                "player_of_series_id": player_id,
+                "player_of_series_name": player_name,
+                "player_of_series_team": _as_text(team.get("name")) or _as_text(team.get("longName")),
+                "player_of_series_type": award_type,
+            }
+    return {field: None for field in PLAYER_OF_SERIES_FIELDS}
+
+
+def derive_series_id(match_info) -> dict:
+    """Return the ESPN series id recorded on a match object, if any."""
+    info = match_info if isinstance(match_info, dict) else {}
+    series = info.get("series")
+    if not isinstance(series, dict):
+        return {"source_series_id": None}
+    return {"source_series_id": _as_int(series.get("id"))}
+
+
 def load_stage_index(path: str | Path) -> dict[str, dict]:
     path = Path(path)
     if path.suffix == ".gz":
@@ -237,7 +364,7 @@ def load_stage_index(path: str | Path) -> dict[str, dict]:
 def apply_stage_entry(meta: dict, entry: dict) -> bool:
     """Copy non-null index values into ``meta``; never erase existing data."""
     changed = False
-    for key in STAGE_FIELDS:
+    for key in META_FIELDS:
         value = entry.get(key)
         if value is None:
             continue

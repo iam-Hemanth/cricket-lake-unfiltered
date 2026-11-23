@@ -3,8 +3,9 @@
 
 Reads ``scorecard.json.gz`` payloads from extracted raw directories or from the
 release ``raw_batch_*.tar.gz`` archives and records the derived
-``match_stage`` / ``match_number`` / ``match_group`` / ``match_title`` per match
-id. No Cricsheet input is used.
+``match_stage`` / ``match_number`` / ``match_group`` / ``match_title`` and the
+Player of the Match (``player_of_match_id`` / ``player_of_match_name`` /
+``player_of_match_team``) per match id. No Cricsheet input is used.
 """
 from __future__ import annotations
 
@@ -20,7 +21,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.stage import derive_stage, unwrap_match_payload
+from src.stage import (
+    derive_player_of_match,
+    derive_player_of_series,
+    derive_series_id,
+    derive_stage,
+    unwrap_match_payload,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("stage_index")
@@ -104,7 +111,13 @@ def main() -> int:
         for mid, payload in records:
             scorecards += 1
             match = (payload or {}).get("match") if isinstance(payload, dict) else None
-            fields = derive_stage(match)
+            content = (payload or {}).get("content") if isinstance(payload, dict) else None
+            fields = {
+                **derive_stage(match),
+                **derive_player_of_match(content),
+                **derive_player_of_series(content),
+                **derive_series_id(match),
+            }
             previous = index.get(mid)
             if previous is not None and previous != fields:
                 conflicts += 1
@@ -123,6 +136,21 @@ def main() -> int:
         "with_number": sum(1 for entry in ordered.values() if entry.get("match_number") is not None),
         "with_group": sum(1 for entry in ordered.values() if entry.get("match_group")),
         "with_title": sum(1 for entry in ordered.values() if entry.get("match_title")),
+        "with_player_of_match": sum(
+            1
+            for entry in ordered.values()
+            if entry.get("player_of_match_id") is not None
+            or entry.get("player_of_match_name") is not None
+        ),
+        "with_player_of_series": sum(
+            1
+            for entry in ordered.values()
+            if entry.get("player_of_series_id") is not None
+            or entry.get("player_of_series_name") is not None
+        ),
+        "with_series_id": sum(
+            1 for entry in ordered.values() if entry.get("source_series_id") is not None
+        ),
         "conflicts": conflicts,
     }
     payload = {

@@ -131,6 +131,62 @@
           ],
           "description": "Raw ESPN match title retained for audit (for example '3rd place play-off' or '49th Match, Super Eights, Group 2')."
         },
+        "player_of_match_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "ESPN player objectId of the recorded Player of the Match (supportInfo.mostValuedPlayerOfTheMatch); objectId is the served player identity, with the legacy id only as a fallback."
+        },
+        "player_of_match_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Recorded Player of the Match name."
+        },
+        "player_of_match_team": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Recorded Player of the Match team name."
+        },
+        "player_of_series_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "ESPN player objectId of the recorded Player of the Series/Tournament (supportInfo.playersOfTheSeries). Recorded on the deciding match's scorecard."
+        },
+        "player_of_series_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Recorded Player of the Series/Tournament name."
+        },
+        "player_of_series_team": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Recorded Player of the Series/Tournament team name."
+        },
+        "player_of_series_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Recorded award type, e.g. PLAYER_OF_SERIES or PLAYER_OF_TOURNAMENT."
+        },
+        "source_series_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "ESPN series id (match.series.id) used to group matches of the same series."
+        },
         "balls_per_over": {
           "type": "integer",
           "default": 6
