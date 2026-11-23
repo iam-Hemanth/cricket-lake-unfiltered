@@ -136,7 +136,7 @@
             "integer",
             "null"
           ],
-          "description": "ESPN player objectId of the recorded Player of the Match (supportInfo.mostValuedPlayerOfTheMatch); objectId is the served player identity, with the legacy id only as a fallback."
+          "description": "ESPN player objectId of the recorded Player of the Match (the PLAYER_OF_MATCH entry in content.matchPlayerAwards, mirrored in supportInfo.playersOfTheMatch); objectId is the served player identity, with the legacy id only as a fallback. The impact metric at supportInfo.mostValuedPlayerOfTheMatch is not the award and is not read."
         },
         "player_of_match_name": {
           "type": [
@@ -157,7 +157,7 @@
             "integer",
             "null"
           ],
-          "description": "ESPN player objectId of the recorded Player of the Series/Tournament (supportInfo.playersOfTheSeries). Recorded on the deciding match's scorecard."
+          "description": "ESPN player objectId of the recorded Player of the Series/Tournament (PLAYER_OF_SERIES/PLAYER_OF_TOURNAMENT in content.matchPlayerAwards, mirrored in supportInfo.playersOfTheSeries). Recorded on the deciding match's scorecard."
         },
         "player_of_series_name": {
           "type": [

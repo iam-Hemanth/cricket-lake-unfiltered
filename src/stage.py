@@ -254,39 +254,60 @@ def _as_text(value):
     return None
 
 
-def derive_player_of_match(content) -> dict:
-    """Return the Player of the Match fields from an ESPN ``content`` object.
+def _award_entries(content, keys) -> list:
+    """Official award entries from an ESPN ``content`` object.
 
-    The award lives at ``supportInfo.mostValuedPlayerOfTheMatch`` with the
-    player and team objects. The player id recorded is the ESPN ``objectId``,
-    which is the served player identity; ``id`` is only a fallback. Absent or
-    malformed data yields all-null fields; nothing is inferred.
+    ``content.matchPlayerAwards`` is the recorded awards list; ``supportInfo``
+    mirrors the same entries (``playersOfTheMatch`` for the match award,
+    ``playersOfTheSeries`` for the series award). Both are official.
+    ``supportInfo.mostValuedPlayerOfTheMatch`` is ESPN's computed impact
+    metric (it carries ``smartRuns``/``totalImpact``), not the award, and is
+    never read here.
     """
     info = content if isinstance(content, dict) else {}
     support = info.get("supportInfo")
     if not isinstance(support, dict):
         support = {}
-    award = support.get("mostValuedPlayerOfTheMatch")
-    if not isinstance(award, dict):
-        return {field: None for field in PLAYER_OF_MATCH_FIELDS}
-    player = award.get("player")
-    if not isinstance(player, dict):
-        player = {}
-    team = award.get("team")
-    if not isinstance(team, dict):
-        team = {}
-    player_id = _as_int(player.get("objectId"))
-    if player_id is None:
-        player_id = _as_int(player.get("id"))
-    player_name = _as_text(player.get("name")) or _as_text(player.get("longName"))
-    team_name = _as_text(team.get("name")) or _as_text(team.get("longName"))
-    if player_id is None and player_name is None:
-        return {field: None for field in PLAYER_OF_MATCH_FIELDS}
-    return {
-        "player_of_match_id": player_id,
-        "player_of_match_name": player_name,
-        "player_of_match_team": team_name,
-    }
+    entries = []
+    for source in (info, support):
+        for key in keys:
+            value = source.get(key)
+            if isinstance(value, list):
+                entries.extend(item for item in value if isinstance(item, dict))
+    return entries
+
+
+def derive_player_of_match(content) -> dict:
+    """Return the Player of the Match fields from an ESPN ``content`` object.
+
+    The official award is the ``PLAYER_OF_MATCH`` entry in
+    ``content.matchPlayerAwards`` (mirrored in
+    ``supportInfo.playersOfTheMatch``). The player id recorded is the ESPN
+    ``objectId``, which is the served player identity; ``id`` is only a
+    fallback. Absent or malformed data yields all-null fields; nothing is
+    inferred. A rare shared award keeps the first entry in recorded order.
+    """
+    for award in _award_entries(content, ("matchPlayerAwards", "playersOfTheMatch")):
+        if _as_text(award.get("type")) != "PLAYER_OF_MATCH":
+            continue
+        player = award.get("player")
+        if not isinstance(player, dict):
+            player = {}
+        team = award.get("team")
+        if not isinstance(team, dict):
+            team = {}
+        player_id = _as_int(player.get("objectId"))
+        if player_id is None:
+            player_id = _as_int(player.get("id"))
+        player_name = _as_text(player.get("name")) or _as_text(player.get("longName"))
+        if player_id is None and player_name is None:
+            continue
+        return {
+            "player_of_match_id": player_id,
+            "player_of_match_name": player_name,
+            "player_of_match_team": _as_text(team.get("name")) or _as_text(team.get("longName")),
+        }
+    return {field: None for field in PLAYER_OF_MATCH_FIELDS}
 
 
 _SERIES_AWARD_TYPES = ("PLAYER_OF_SERIES", "PLAYER_OF_TOURNAMENT", "PLAYER_OF_THE_TOURNAMENT")
@@ -295,24 +316,15 @@ _SERIES_AWARD_TYPES = ("PLAYER_OF_SERIES", "PLAYER_OF_TOURNAMENT", "PLAYER_OF_TH
 def derive_player_of_series(content) -> dict:
     """Return the Player of the Series/Tournament fields from an ESPN content object.
 
-    The award lives in ``supportInfo.playersOfTheSeries`` as a list of
-    ``{type, player, team}`` entries. A ``PLAYER_OF_SERIES`` entry wins over a
-    tournament entry; the recorded type is preserved. Absent data yields
-    all-null fields.
+    The official award is a ``PLAYER_OF_SERIES``/``PLAYER_OF_TOURNAMENT``
+    entry in ``content.matchPlayerAwards`` (mirrored in
+    ``supportInfo.playersOfTheSeries``). A ``PLAYER_OF_SERIES`` entry wins
+    over a tournament entry; the recorded type is preserved. Absent data
+    yields all-null fields.
     """
-    info = content if isinstance(content, dict) else {}
-    support = info.get("supportInfo")
-    if not isinstance(support, dict):
-        support = {}
-    awards = support.get("playersOfTheSeries")
-    if not isinstance(awards, list):
-        return {field: None for field in PLAYER_OF_SERIES_FIELDS}
     for wanted in _SERIES_AWARD_TYPES:
-        for award in awards:
-            if not isinstance(award, dict):
-                continue
-            award_type = _as_text(award.get("type"))
-            if award_type != wanted:
+        for award in _award_entries(content, ("matchPlayerAwards", "playersOfTheSeries")):
+            if _as_text(award.get("type")) != wanted:
                 continue
             player = award.get("player")
             if not isinstance(player, dict):
@@ -330,7 +342,7 @@ def derive_player_of_series(content) -> dict:
                 "player_of_series_id": player_id,
                 "player_of_series_name": player_name,
                 "player_of_series_team": _as_text(team.get("name")) or _as_text(team.get("longName")),
-                "player_of_series_type": award_type,
+                "player_of_series_type": wanted,
             }
     return {field: None for field in PLAYER_OF_SERIES_FIELDS}
 

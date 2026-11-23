@@ -65,34 +65,88 @@ class StageDerivationTests(unittest.TestCase):
 
     def test_player_of_match_derivation(self):
         content = {
+            "matchPlayerAwards": [
+                {
+                    "type": "PLAYER_OF_MATCH",
+                    "player": {"id": 108339, "objectId": 5001, "name": "Maaz Sadaqat"},
+                    "team": {"id": 7, "name": "Pakistan"},
+                }
+            ]
+        }
+        self.assertEqual(
+            derive_player_of_match(content),
+            {
+                "player_of_match_id": 5001,
+                "player_of_match_name": "Maaz Sadaqat",
+                "player_of_match_team": "Pakistan",
+            },
+        )
+
+    def test_player_of_match_ignores_the_impact_metric(self):
+        # supportInfo.mostValuedPlayerOfTheMatch carries smartRuns/totalImpact
+        # and is ESPN's computed metric, not the official award.
+        content = {
             "supportInfo": {
                 "mostValuedPlayerOfTheMatch": {
                     "player": {"id": 108339, "name": "Maaz Sadaqat"},
                     "team": {"id": 7, "name": "Pakistan"},
+                    "totalImpact": 88.4,
                 }
             }
         }
         self.assertEqual(
             derive_player_of_match(content),
             {
-                "player_of_match_id": 108339,
-                "player_of_match_name": "Maaz Sadaqat",
-                "player_of_match_team": "Pakistan",
+                "player_of_match_id": None,
+                "player_of_match_name": None,
+                "player_of_match_team": None,
             },
         )
 
-    def test_player_of_series_derivation(self):
+    def test_player_of_match_uses_the_support_mirror(self):
         content = {
             "supportInfo": {
-                "playersOfTheSeries": [
-                    {"type": "PLAYER_OF_TOURNAMENT", "player": {"id": 1, "name": "Skipped"}},
+                "playersOfTheMatch": [
                     {
-                        "type": "PLAYER_OF_SERIES",
-                        "player": {"id": 71619, "objectId": 647785, "name": "Sahibzada Farhan"},
-                        "team": {"id": 7, "name": "Pakistan"},
-                    },
+                        "type": "PLAYER_OF_MATCH",
+                        "player": {"id": 5, "name": "Mirror Winner"},
+                        "team": {"name": "Team X"},
+                    }
                 ]
             }
+        }
+        self.assertEqual(
+            derive_player_of_match(content),
+            {
+                "player_of_match_id": 5,
+                "player_of_match_name": "Mirror Winner",
+                "player_of_match_team": "Team X",
+            },
+        )
+
+    def test_player_of_match_prefers_the_recorded_awards_list(self):
+        content = {
+            "matchPlayerAwards": [
+                {"type": "PLAYER_OF_MATCH", "player": {"objectId": 1, "name": "First"}}
+            ],
+            "supportInfo": {
+                "playersOfTheMatch": [
+                    {"type": "PLAYER_OF_MATCH", "player": {"objectId": 2, "name": "Second"}}
+                ]
+            },
+        }
+        self.assertEqual(derive_player_of_match(content)["player_of_match_id"], 1)
+
+    def test_player_of_series_derivation(self):
+        content = {
+            "matchPlayerAwards": [
+                {"type": "PLAYER_OF_TOURNAMENT", "player": {"id": 1, "name": "Skipped"}},
+                {
+                    "type": "PLAYER_OF_SERIES",
+                    "player": {"id": 71619, "objectId": 647785, "name": "Sahibzada Farhan"},
+                    "team": {"id": 7, "name": "Pakistan"},
+                },
+            ]
         }
         self.assertEqual(
             derive_player_of_series(content),
@@ -104,13 +158,26 @@ class StageDerivationTests(unittest.TestCase):
             },
         )
 
-    def test_player_of_series_tournament_type(self):
+    def test_player_of_series_uses_the_support_mirror(self):
         content = {
             "supportInfo": {
                 "playersOfTheSeries": [
-                    {"type": "PLAYER_OF_TOURNAMENT", "player": {"id": 2, "name": "Winner"}}
+                    {
+                        "type": "PLAYER_OF_SERIES",
+                        "player": {"id": 42, "name": "Mirror Winner"},
+                    }
                 ]
             }
+        }
+        result = derive_player_of_series(content)
+        self.assertEqual(result["player_of_series_id"], 42)
+        self.assertEqual(result["player_of_series_type"], "PLAYER_OF_SERIES")
+
+    def test_player_of_series_tournament_type(self):
+        content = {
+            "matchPlayerAwards": [
+                {"type": "PLAYER_OF_TOURNAMENT", "player": {"id": 2, "name": "Winner"}}
+            ]
         }
         result = derive_player_of_series(content)
         self.assertEqual(result["player_of_series_id"], 2)
@@ -127,16 +194,16 @@ class StageDerivationTests(unittest.TestCase):
         self.assertEqual(derive_player_of_series(None), empty)
         self.assertEqual(derive_player_of_series({}), empty)
         self.assertEqual(
-            derive_player_of_series({"supportInfo": {"playersOfTheSeries": None}}),
+            derive_player_of_series({"matchPlayerAwards": None}),
             empty,
         )
         self.assertEqual(
-            derive_player_of_series({"supportInfo": {"playersOfTheSeries": []}}),
+            derive_player_of_series({"matchPlayerAwards": []}),
             empty,
         )
         self.assertEqual(
             derive_player_of_series(
-                {"supportInfo": {"playersOfTheSeries": [{"type": "OTHER", "player": {"id": 1}}]}}
+                {"matchPlayerAwards": [{"type": "OTHER", "player": {"id": 1}}]}
             ),
             empty,
         )
@@ -149,12 +216,13 @@ class StageDerivationTests(unittest.TestCase):
 
     def test_player_of_match_prefers_object_id(self):
         content = {
-            "supportInfo": {
-                "mostValuedPlayerOfTheMatch": {
+            "matchPlayerAwards": [
+                {
+                    "type": "PLAYER_OF_MATCH",
                     "player": {"id": 7781, "objectId": 35263, "name": "V Sehwag"},
                     "team": {"id": 7, "name": "Daredevils"},
                 }
-            }
+            ]
         }
         result = derive_player_of_match(content)
         self.assertEqual(result["player_of_match_id"], 35263)
@@ -170,11 +238,17 @@ class StageDerivationTests(unittest.TestCase):
         self.assertEqual(derive_player_of_match({"supportInfo": None}), empty)
         self.assertEqual(derive_player_of_match({"supportInfo": {}}), empty)
         self.assertEqual(
-            derive_player_of_match({"supportInfo": {"mostValuedPlayerOfTheMatch": None}}),
+            derive_player_of_match({"matchPlayerAwards": None}),
             empty,
         )
         self.assertEqual(
-            derive_player_of_match({"supportInfo": {"mostValuedPlayerOfTheMatch": {"player": {}}}}),
+            derive_player_of_match({"matchPlayerAwards": [{"type": "BOWLER_OF_MATCH", "player": {"id": 1}}]}),
+            empty,
+        )
+        self.assertEqual(
+            derive_player_of_match(
+                {"matchPlayerAwards": [{"type": "PLAYER_OF_MATCH", "player": {}}]}
+            ),
             empty,
         )
 
@@ -191,19 +265,18 @@ class StageDerivationTests(unittest.TestCase):
     def test_constructor_uses_awards_and_series(self):
         raw = details()
         raw["match"]["series"]["id"] = 18514
-        raw["content"]["supportInfo"] = {
-            "mostValuedPlayerOfTheMatch": {
+        raw["content"]["matchPlayerAwards"] = [
+            {
+                "type": "PLAYER_OF_MATCH",
                 "player": {"id": 108339, "name": "Maaz Sadaqat"},
                 "team": {"id": 7, "name": "Pakistan"},
             },
-            "playersOfTheSeries": [
-                {
-                    "type": "PLAYER_OF_SERIES",
-                    "player": {"id": 71619, "objectId": 647785, "name": "Sahibzada Farhan"},
-                    "team": {"id": 7, "name": "Pakistan"},
-                }
-            ],
-        }
+            {
+                "type": "PLAYER_OF_SERIES",
+                "player": {"id": 71619, "objectId": 647785, "name": "Sahibzada Farhan"},
+                "team": {"id": 7, "name": "Pakistan"},
+            },
+        ]
         match, error = construct_match_v3("fixture", raw, {1: [ball()]}, {}, {}, {})
         self.assertIsNone(error)
         meta = match["meta"]
