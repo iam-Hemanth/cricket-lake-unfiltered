@@ -196,8 +196,8 @@ jobs:
             tar -czf "raw_batch_recovery_${STAMP}.tar.gz" -C raw_merged .
             UPLOADS+=("raw_batch_recovery_${STAMP}.tar.gz")
           fi
-          gh release view data-unfiltered-batches >/dev/null 2>&1 || \
-            gh release create data-unfiltered-batches --title "Batch archives" --notes "Recovery and scheduled batches." --latest=false
-          gh release upload data-unfiltered-batches "${UPLOADS[@]}" --clobber
+          gh release view data-unfiltered-batches --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create data-unfiltered-batches --repo "$GITHUB_REPOSITORY" --title "Batch archives" --notes "Recovery and scheduled batches." --latest=false
+          gh release upload data-unfiltered-batches "${UPLOADS[@]}" --repo "$GITHUB_REPOSITORY" --clobber
           echo "### Backfill" >> "$GITHUB_STEP_SUMMARY"
           echo "Recovered $COUNT matches ($RAW_COUNT raw scorecards) into \`matches_batch_recovery_${STAMP}.tar.gz\`." >> "$GITHUB_STEP_SUMMARY"
