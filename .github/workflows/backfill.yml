@@ -4,9 +4,12 @@ name: Backfill missed matches
 #   * a queue file produced by scripts/audit_missing.py (missing/missing_matches.json)
 #   * the failure logs the extractor already wrote (failed_matches.json)
 #
-# Output is packaged as `matches_batch_recovery_<stamp>.tar.gz` on the existing
-# `data-unfiltered-batches` release, so `consolidate_full_lake.yml` picks it up
-# without any change to its download glob.
+# Output is packaged as `matches_batch_recovery_<stamp>.tar.gz` (processed
+# matches) and `raw_batch_recovery_<stamp>.tar.gz` (the raw scorecards), both
+# on the existing `data-unfiltered-batches` release, so
+# `consolidate_full_lake.yml` and the stage-index builder pick them up without
+# any glob change. The raw batch is what lets the stage index cover recovered
+# matches.
 
 on:
   workflow_dispatch:
@@ -138,12 +141,24 @@ jobs:
           mkdir -p "out/chunk_${{ matrix.chunk.chunk }}"
           tar -czf "recovery_chunk_${{ matrix.chunk.chunk }}.tar.gz" \
               --exclude=failed_matches.json -C "out/chunk_${{ matrix.chunk.chunk }}" .
+          if [ -d "raw/chunk_${{ matrix.chunk.chunk }}" ]; then
+            tar -czf "raw_chunk_${{ matrix.chunk.chunk }}.tar.gz" \
+                -C "raw/chunk_${{ matrix.chunk.chunk }}" .
+          fi
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: recovery-chunk-${{ matrix.chunk.chunk }}
           path: recovery_chunk_${{ matrix.chunk.chunk }}.tar.gz
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: raw-chunk-${{ matrix.chunk.chunk }}
+          path: raw_chunk_${{ matrix.chunk.chunk }}.tar.gz
+          if-no-files-found: ignore
           retention-days: 30
 
   publish:
@@ -156,7 +171,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: recovery-chunk-*
+          pattern: "*-chunk-*"
           merge-multiple: true
           path: chunks
 
@@ -165,15 +180,22 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          mkdir -p merged
-          for t in chunks/*.tar.gz; do tar -xzf "$t" -C merged; done
+          mkdir -p merged raw_merged
+          for t in chunks/recovery_chunk_*.tar.gz; do tar -xzf "$t" -C merged; done
           COUNT=$(find merged -name '*.json' | wc -l | tr -d ' ')
-          echo "recovered: $COUNT"
+          shopt -s nullglob
+          for t in chunks/raw_chunk_*.tar.gz; do tar -xzf "$t" -C raw_merged; done
+          RAW_COUNT=$(find raw_merged -name 'scorecard.json.gz' | wc -l | tr -d ' ')
+          echo "recovered: $COUNT (raw scorecards: $RAW_COUNT)"
           STAMP="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID}"
           tar -czf "matches_batch_recovery_${STAMP}.tar.gz" -C merged .
+          UPLOADS=("matches_batch_recovery_${STAMP}.tar.gz")
+          if [ "$RAW_COUNT" -gt 0 ]; then
+            tar -czf "raw_batch_recovery_${STAMP}.tar.gz" -C raw_merged .
+            UPLOADS+=("raw_batch_recovery_${STAMP}.tar.gz")
+          fi
           gh release view data-unfiltered-batches >/dev/null 2>&1 || \
             gh release create data-unfiltered-batches --title "Batch archives" --notes "Recovery and scheduled batches." --latest=false
-          gh release upload data-unfiltered-batches \
-            "matches_batch_recovery_${STAMP}.tar.gz" --clobber
+          gh release upload data-unfiltered-batches "${UPLOADS[@]}" --clobber
           echo "### Backfill" >> "$GITHUB_STEP_SUMMARY"
-          echo "Recovered $COUNT matches into \`matches_batch_recovery_${STAMP}.tar.gz\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "Recovered $COUNT matches ($RAW_COUNT raw scorecards) into \`matches_batch_recovery_${STAMP}.tar.gz\`." >> "$GITHUB_STEP_SUMMARY"
