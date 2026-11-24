@@ -227,6 +227,39 @@ jobs:
             --output-dir "$OUT" \
             --raw-dir "$RAW"
 
+      - name: Meta coverage guard
+        if: always()
+        env:
+          CHUNK: ${{ matrix.chunk.chunk }}
+        run: |
+          python - <<'PY'
+          import glob, json, os
+
+          files = sorted(glob.glob(f"out/chunk_{os.environ['CHUNK']}/*.json"))
+          total = series = stage = number = pom = 0
+          for path in files:
+              if os.path.basename(path) == "failed_matches.json":
+                  continue
+              try:
+                  doc = json.load(open(path, encoding="utf-8"))
+              except Exception:
+                  continue
+              meta = doc.get("meta") or {}
+              total += 1
+              series += 1 if meta.get("source_series_id") is not None else 0
+              stage += 1 if meta.get("match_stage") else 0
+              number += 1 if meta.get("match_number") is not None else 0
+              pom += 1 if meta.get("player_of_match_id") is not None else 0
+          line = (f"meta coverage: {total} matches | series id {series} | "
+                  f"stage {stage} | number {number} | PoM {pom}")
+          print(line)
+          if total and series < total:
+              print(f"::warning::{total - series} of {total} extracted matches lack "
+                    "source_series_id — check the constructor meta")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
+              fh.write(line + "\n")
+          PY
+
       - name: Pack parsed output
         if: always()
         run: |
