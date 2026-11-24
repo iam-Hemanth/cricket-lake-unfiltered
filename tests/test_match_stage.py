@@ -398,5 +398,67 @@ class StageIndexTests(unittest.TestCase):
         self.assertEqual(row["match_title"], "2nd Final")
 
 
+class ProcessedIndexTests(unittest.TestCase):
+    """The stage index must see the 6-hourly delta archives, not only the bulk
+    raw batches: recovered/delta matches otherwise never enter the index."""
+
+    def _delta_tar(self, directory: Path) -> Path:
+        import io
+        import tarfile
+
+        path = directory / "lake_delta_test.tar.gz"
+        doc = {
+            "match_id": "123",
+            "meta": {
+                "match_stage": "Final",
+                "match_number": 3,
+                "match_group": None,
+                "match_title": "Final",
+                "player_of_match_id": 42,
+                "player_of_match_name": "A Player",
+                "player_of_match_team": "A Team",
+                "player_of_series_id": None,
+                "source_series_id": 9,
+            },
+        }
+        raw = json.dumps(doc).encode("utf-8")
+        with tarfile.open(path, "w:gz") as tf:
+            info = tarfile.TarInfo("./123.json")
+            info.size = len(raw)
+            tf.addfile(info, io.BytesIO(raw))
+        return path
+
+    def test_processed_reader_and_index(self):
+        import sys
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        import build_stage_index
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            path = self._delta_tar(tmp_path)
+            entries = dict(build_stage_index._iter_processed_tar(path))
+            self.assertEqual(entries["123"]["match_stage"], "Final")
+            self.assertEqual(entries["123"]["player_of_match_id"], 42)
+
+            out = tmp_path / "index.json.gz"
+            argv = sys.argv
+            sys.argv = [
+                "build_stage_index.py",
+                "--processed-tar", str(path),
+                "--output", str(out),
+            ]
+            try:
+                self.assertEqual(build_stage_index.main(), 0)
+            finally:
+                sys.argv = argv
+            import gzip
+
+            doc = json.load(gzip.open(out))
+            self.assertEqual(doc["counts"]["processed_matches"], 1)
+            self.assertEqual(doc["counts"]["indexed"], 1)
+            self.assertEqual(doc["matches"]["123"]["source_series_id"], 9)
+
+
 if __name__ == "__main__":
     unittest.main()

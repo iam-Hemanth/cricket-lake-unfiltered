@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Build a stage index from stored ESPN raw scorecards.
+"""Build a stage index from stored ESPN raw scorecards and processed matches.
 
 Reads ``scorecard.json.gz`` payloads from extracted raw directories or from the
 release ``raw_batch_*.tar.gz`` archives and records the derived
 ``match_stage`` / ``match_number`` / ``match_group`` / ``match_title`` and the
 Player of the Match (``player_of_match_id`` / ``player_of_match_name`` /
 ``player_of_match_team``) per match id. No Cricsheet input is used.
+
+``--processed-tar`` additionally reads the 6-hourly delta archives
+(``lake_delta_*.tar.gz``): their match JSONs already carry the constructor's
+``meta``, so matches extracted after the bulk raw batches are covered too.
+Processed entries override raw-derived ones for the same id (newer code,
+same source); absent keys stay absent and are never invented.
 """
 from __future__ import annotations
 
@@ -69,6 +75,53 @@ def _iter_tar(path: Path):
         logger.error("Cannot read %s: %s", path, exc)
 
 
+PROCESSED_FIELDS = (
+    "match_stage",
+    "match_number",
+    "match_group",
+    "match_title",
+    "player_of_match_id",
+    "player_of_match_name",
+    "player_of_match_team",
+    "player_of_series_id",
+    "player_of_series_name",
+    "player_of_series_team",
+    "player_of_series_type",
+    "source_series_id",
+)
+
+
+def _iter_processed_tar(path: Path):
+    """Yield (match_id, meta) from a processed-match archive (``{mid}.json``).
+
+    The 6-hourly ``lake_delta_*`` archives carry the constructor's match JSONs,
+    whose ``meta`` already holds the stage/number/group/award fields. Older
+    deltas predate some fields; absent keys stay absent (never invented).
+    """
+    try:
+        with tarfile.open(path, "r:gz") as archive:
+            for member in archive:
+                if not member.isfile() or not member.name.endswith(".json"):
+                    continue
+                mid = Path(member.name).stem
+                if not mid.isdigit():
+                    continue
+                handle = archive.extractfile(member)
+                if handle is None:
+                    continue
+                try:
+                    doc = json.loads(handle.read().decode("utf-8"))
+                except (OSError, json.JSONDecodeError) as exc:
+                    logger.warning("Skipping %s:%s: %s", path, member.name, exc)
+                    continue
+                meta = doc.get("meta") if isinstance(doc, dict) else None
+                if not isinstance(meta, dict):
+                    continue
+                yield mid, meta
+    except (OSError, tarfile.TarError) as exc:
+        logger.error("Cannot read %s: %s", path, exc)
+
+
 def _load_ids(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".csv":
@@ -92,13 +145,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", action="append", default=[], help="Directory containing <id>/scorecard.json.gz (repeatable)")
     parser.add_argument("--tar", action="append", default=[], help="raw_batch_*.tar.gz archive (repeatable)")
+    parser.add_argument("--processed-tar", action="append", default=[], help="lake_delta_*.tar.gz processed-match archive (repeatable)")
     parser.add_argument("--ids-file", type=Path, default=None, help="Published match ids (CSV, JSON or text) for gap reporting")
     parser.add_argument("--output", type=Path, required=True, help="stage_index.json or stage_index.json.gz")
     parser.add_argument("--summary", type=Path, default=None, help="Optional JSON summary")
     args = parser.parse_args()
 
-    if not args.raw_dir and not args.tar:
-        parser.error("at least one --raw-dir or --tar is required")
+    if not args.raw_dir and not args.tar and not args.processed_tar:
+        parser.error("at least one --raw-dir, --tar or --processed-tar is required")
 
     index: dict[str, dict] = {}
     conflicts = 0
@@ -125,12 +179,20 @@ def main() -> int:
                 continue
             index[mid] = fields
 
+    processed = 0
+    for path in args.processed_tar:
+        logger.info("Reading processed tar %s", Path(path))
+        for mid, meta in _iter_processed_tar(Path(path)):
+            processed += 1
+            index[mid] = {key: meta.get(key) for key in PROCESSED_FIELDS}
+
     ordered = {
         key: index[key]
         for key in sorted(index, key=lambda value: (not value.isdigit(), int(value) if value.isdigit() else value))
     }
     counts = {
         "scorecards": scorecards,
+        "processed_matches": processed,
         "indexed": len(ordered),
         "with_stage": sum(1 for entry in ordered.values() if entry.get("match_stage")),
         "with_number": sum(1 for entry in ordered.values() if entry.get("match_number") is not None),
