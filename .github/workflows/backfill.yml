@@ -23,9 +23,9 @@ on:
         required: false
         default: '0'
       chunk_size:
-        description: 'Matches per parallel chunk'
+        description: 'Matches per parallel chunk (0 = auto: about 8 chunks)'
         required: false
-        default: '100'
+        default: '0'
       quarantine:
         description: 'Keep matches that fail validation (flagged, not dropped)'
         type: boolean
@@ -67,6 +67,8 @@ jobs:
           if limit:
               ids = ids[:limit]
           chunk = int(os.environ["CHUNK"])
+          if chunk <= 0:
+              chunk = max(1, math.ceil(len(ids) / 8)) if ids else 1
           chunks = math.ceil(len(ids) / chunk) if ids else 0
           if chunks > 256:
               raise SystemExit(
