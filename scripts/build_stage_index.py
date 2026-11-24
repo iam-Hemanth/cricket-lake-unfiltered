@@ -10,8 +10,9 @@ Player of the Match (``player_of_match_id`` / ``player_of_match_name`` /
 ``--processed-tar`` additionally reads the 6-hourly delta archives
 (``lake_delta_*.tar.gz``): their match JSONs already carry the constructor's
 ``meta``, so matches extracted after the bulk raw batches are covered too.
-Processed entries override raw-derived ones for the same id (newer code,
-same source); absent keys stay absent and are never invented.
+Processed entries merge field by field (they win where they carry a value;
+older deltas lack the award fields and keep the raw-derived values). Absent
+keys stay absent and are never invented.
 """
 from __future__ import annotations
 
@@ -122,6 +123,21 @@ def _iter_processed_tar(path: Path):
         logger.error("Cannot read %s: %s", path, exc)
 
 
+def _merge_processed(index: dict[str, dict], mid: str, meta: dict) -> dict:
+    """Merge a processed entry field by field.
+
+    Processed matches override raw-derived values only where they carry a
+    value; a field the processed entry lacks (older deltas predate the award
+    fields) keeps the raw-derived value. Fields are never deleted.
+    """
+    merged = dict(index.get(mid) or {})
+    for key in PROCESSED_FIELDS:
+        value = meta.get(key)
+        if value is not None and value != "":
+            merged[key] = value
+    return merged
+
+
 def _load_ids(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".csv":
@@ -184,7 +200,7 @@ def main() -> int:
         logger.info("Reading processed tar %s", Path(path))
         for mid, meta in _iter_processed_tar(Path(path)):
             processed += 1
-            index[mid] = {key: meta.get(key) for key in PROCESSED_FIELDS}
+            index[mid] = _merge_processed(index, mid, meta)
 
     ordered = {
         key: index[key]

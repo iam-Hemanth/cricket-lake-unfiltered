@@ -428,6 +428,20 @@ class ProcessedIndexTests(unittest.TestCase):
             tf.addfile(info, io.BytesIO(raw))
         return path
 
+    def test_processed_merge_never_drops_raw_fields(self):
+        import sys
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        import build_stage_index
+
+        raw = {"match_stage": "Final", "player_of_match_id": 42,
+               "source_series_id": 9}
+        meta = {"match_stage": "Semi Final", "player_of_match_id": None}
+        merged = build_stage_index._merge_processed({"123": raw}, "123", meta)
+        self.assertEqual(merged["match_stage"], "Semi Final")
+        self.assertEqual(merged["player_of_match_id"], 42)
+        self.assertEqual(merged["source_series_id"], 9)
+
     def test_processed_reader_and_index(self):
         import sys
 
