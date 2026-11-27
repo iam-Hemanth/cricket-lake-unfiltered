@@ -132,6 +132,11 @@ def scorecard_only_details(inn, id_map, players):
         })
     fow = []
     for entry in inn.get("inningFallOfWickets") or []:
+        # ESPN marks the innings-end total with fowType 2, fowWicketNum 0 and no
+        # dismissal batsman. It is not a wicket, so it is not stored as one.
+        fow_type = entry.get("fowType")
+        if fow_type is not None and fow_type != 1:
+            continue
         player = entry.get("dismissalBatsman") or {}
         fow.append({
             "wicket_number": _optional_count(entry.get("fowWicketNum")),

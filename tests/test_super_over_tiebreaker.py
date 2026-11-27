@@ -179,6 +179,28 @@ class SuperOverShapeTests(unittest.TestCase):
         # The actor listed only on the Super Over line still joins the registry.
         self.assertIn('espn_1023', match['players'])
 
+    def test_innings_end_fall_of_wickets_marker_is_not_stored_as_a_wicket(self):
+        raw = details(
+            status_text='Match tied (A won the Super Over)',
+            lang_key='match_status_text_tied_tiebreaker_on_super_over',
+            tiebreaker_id=10, is_super_over=True,
+            super_overs=[
+                _super_innings(3, 10, 'A', runs=17, wickets=0, balls=6),
+                _super_innings(4, 20, 'B', runs=4, wickets=1, balls=3),
+            ],
+        )
+        end_marker = {
+            'dismissalBatsman': None, 'fowType': 2, 'fowOrder': 0,
+            'fowWicketNum': 0, 'fowRuns': 17, 'fowOvers': 1, 'fowBalls': 6,
+        }
+        raw['content']['superOverInnings'][0]['inningFallOfWickets'] = [end_marker]
+        raw['content']['superOverInnings'][1]['inningFallOfWickets'][0]['fowType'] = 1
+        match = build(raw)
+        assert_valid(self, match, raw)
+        so = [i for i in match['innings'] if i['super_over']]
+        self.assertEqual(so[0]['scorecard_only_details']['fow'], [])
+        self.assertEqual(so[1]['scorecard_only_details']['fow'][0]['wicket_number'], 1)
+
     def test_double_super_over_keeps_four_decider_innings(self):
         raw = details(
             status_text='Match tied (B won the 2nd Super Over)',
