@@ -195,6 +195,29 @@ from coming back.
   The schedule feed (`lake-schedule`) is strictly separate from match
   ingestion.
 
+## The migration (done 28 November 2026)
+
+The lake was moved behind the catalog on 28 November 2026. What it produced:
+
+| | |
+|---|---|
+| Raw batch assets read | 83 (59 local, 24 from the external `cricket-extractor` repository) |
+| Matches rebuilt | 18,663, from the stored raw payloads, offline |
+| Shards | 64 `raw_shard_NN` + 64 `built_shard_NN`, 2.2 GB, largest shard 36.6 MB |
+| Catalog | 19,348 rows, 3 MB |
+| Published matches lost | **0** |
+
+The catalog holds 19,348 rows for 18,663 rebuilt matches: the extra 685 are
+the published matches that were never given a raw payload. They are recorded
+as `legacy_unbacked` and stay published. A targeted `ingest --match-ids` pass
+gives them a raw payload and turns them into ordinary rows.
+
+The 661 matches the migrated lake has and the published lake did not are
+matches the raw batches held but that had never been published.
+
+The migration workflow (`migrate.yml`) is temporary and should be removed
+once nothing more needs migrating.
+
 ## Where things are
 
 | Path | Holds |
