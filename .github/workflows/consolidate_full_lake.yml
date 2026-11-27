@@ -82,20 +82,53 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Recovery batches are targeted re-fetches and therefore newer than the
-      # curated lake and the ordinary batch archives. Unpacking them first let
-      # the curated/batch copies overwrite corrected records; re-applying them
-      # last makes the newest re-extraction authoritative for those ids.
-      - name: Re-apply recovery batches last
+      # Raw batch archives, the curated lake and the 6-hourly deltas are
+      # snapshots from different dates. Unpacking every recovery batch last
+      # lets stale re-fetches overwrite newer curated outputs; on 27 Nov that
+      # quarantined 1,519 otherwise-valid matches. Only ids listed under
+      # corrections/ are authoritative, and they are re-applied on every
+      # rebuild so a correction survives the next full consolidation.
+      - name: Re-apply correction overlays last
         run: |
           set -euo pipefail
           shopt -s nullglob
+          overlays=(corrections/*.json)
           archives=(delta_archives/matches_batch_recovery_*.tar.gz)
+          if [ "${#overlays[@]}" -eq 0 ]; then
+            echo "No correction overlays."
+            exit 0
+          fi
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
           for arch in "${archives[@]}"; do
-            echo "Re-applying $arch..."
-            tar -xzf "$arch" -C master_all_matches
+            echo "Staging $arch..."
+            tar -xzf "$arch" -C "$tmp"
           done
-          echo "Re-applied ${#archives[@]} recovery batch(es)."
+          python - "$tmp" "${overlays[@]}" <<'PY'
+          import json
+          import shutil
+          import sys
+          from pathlib import Path
+
+          stage = Path(sys.argv[1])
+          ids = []
+          for name in sys.argv[2:]:
+              data = json.loads(Path(name).read_text())
+              ids.extend(data['ids'] if isinstance(data, dict) else data)
+
+          dest = Path('master_all_matches')
+          applied, missing = [], []
+          for match_id in sorted(set(ids)):
+              source = stage / f'{match_id}.json'
+              if source.is_file():
+                  shutil.copy2(source, dest / f'{match_id}.json')
+                  applied.append(match_id)
+              else:
+                  missing.append(match_id)
+          print(f'Applied {len(applied)} correction(s); missing {len(missing)}')
+          if missing:
+              raise SystemExit('missing correction ids: ' + ', '.join(missing))
+          PY
           TOTAL_COUNT=$(find master_all_matches -name "*.json" ! -name "failed_matches.json" ! -name "lake_manifest.json" | wc -l | tr -d ' ')
           echo "Master now holds $TOTAL_COUNT unique matches."
 
