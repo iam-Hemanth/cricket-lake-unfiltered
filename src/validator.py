@@ -519,6 +519,13 @@ _SOURCE_GAP_PREFIXES = (
     "Total extras mismatch:",
     "Unrecognized dismissal kind:",
     "Scorecard runs mismatch:",
+    # The same two checks as the two entries above, reported against the
+    # scorecard that was supplied rather than the one that was stored. A
+    # match is built from one or the other, so both spellings have to be
+    # recognised.
+    "Supplied source legal-ball coverage mismatch",
+    "Supplied source exact legal-ball total mismatch",
+    "Supplied source exact runs mismatch",
 )
 
 
@@ -882,6 +889,12 @@ def _source_gap_code(message: str) -> str:
         return "UNRECOGNIZED_DISMISSAL_KIND"
     if message.startswith("Scorecard runs mismatch:"):
         return "SCORECARD_RUNS_MISMATCH"
+    if message.startswith("Supplied source legal-ball coverage mismatch"):
+        return "LEGAL_BALL_COVERAGE_MISMATCH"
+    if message.startswith("Supplied source exact legal-ball total mismatch"):
+        return "LEGAL_BALL_COVERAGE_MISMATCH"
+    if message.startswith("Supplied source exact runs mismatch"):
+        return "EXACT_RUNS_MISMATCH"
     if message.startswith("Inn ") and "legal balls (expected" in message:
         return "OVER_LENGTH_PAIRED"
     if message.startswith("Participant identity issue"):
