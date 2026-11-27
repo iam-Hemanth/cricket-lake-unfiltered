@@ -2,25 +2,26 @@
 """
 extract.py
 Production CLI Extractor for ESPNcricinfo Data Lake.
-Fetches, stores raw byte-for-byte responses, constructs Match JSON v3.0,
-validates integrity, and outputs to the data lake.
+
+Fetches a match, stores every raw payload it received, then builds the Match
+JSON through the shared builder. This file is only a command-line wrapper:
+the fetch lives in ``src.commentary`` and the build in ``src.builder``, so the
+live path and the offline re-parser cannot drift apart.
 """
 import argparse
 import csv
 import json
 import logging
-import os
 import random
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
+from src.builder import References, build_match
 from src.client import CircuitBreakerTripped, CricinfoClient
-from src.commentary import fetch_innings_commentary, fetch_match_details
-from src.constructor import construct_match_v3
+from src.commentary import FetchBundleError, fetch_match_bundle
 from src.cricsheet_audit import CricsheetAuditor
-from src.validator import validate_match_data
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,7 +31,7 @@ logging.basicConfig(
 logger = logging.getLogger("extractor")
 
 
-def load_references(repo_root: Path) -> Tuple[dict, dict, dict]:
+def load_references(repo_root: Path) -> References:
     """Load player profiles, people registry, and venue mappings."""
     profiles_path = repo_root / "data" / "player_profiles_cache.json"
     player_profiles = {}
@@ -55,7 +56,11 @@ def load_references(repo_root: Path) -> Tuple[dict, dict, dict]:
                 if cricinfo_id and cid:
                     people_registry[str(cricinfo_id)] = cid
 
-    return player_profiles, people_registry, venue_map
+    return References(
+        player_profiles=player_profiles,
+        people_registry=people_registry,
+        venue_map=venue_map,
+    )
 
 
 def get_target_match_ids(args: argparse.Namespace, repo_root: Path) -> List[str]:
@@ -135,7 +140,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     raw_dir.mkdir(parents=True, exist_ok=True)
 
-    player_profiles, people_registry, venue_map = load_references(repo_root)
+    references = load_references(repo_root)
     auditor = None
     if args.cricsheet_dir and Path(args.cricsheet_dir).exists():
         auditor = CricsheetAuditor(str(repo_root / "data" / "people.csv"))
@@ -166,120 +171,45 @@ def main():
                 continue
 
             logger.info(f"[{idx}/{total_targets}] Extracting match {mid}...")
-            match_raw_dir = raw_dir / str(mid)
 
-            # 1. Fetch details & scorecard
-            details, err = fetch_match_details(
-                client=client,
-                match_id=mid,
-                raw_dir=raw_dir,
-                delay_sec=args.delay
-            )
-            if err or not details:
-                logger.warning(f"Failed to fetch details for match {mid}: {err}")
-                failed_matches[mid] = f"Details fetch failed: {err}"
-                continue
-
-            match_info = details.get("match") or {}
-            content = details.get("content") or {}
-            series_id = str(
-                (match_info.get("series") or {}).get("objectId")
-                or (match_info.get("series") or {}).get("id")
-                or ""
-            )
-
-            # 2. Fetch innings commentary
-            innings_list = content.get("innings") or []
-            commentary_chunks_by_inn: Dict[Any, List[dict]] = {}
-            inn_fetch_failed = False
-
-            for inn_idx, inn in enumerate(innings_list, 1):
-                inn_num = inn.get("inningNumber") or inn_idx
-                chunks, c_err = fetch_innings_commentary(
-                    client=client,
-                    series_id=series_id,
-                    match_id=mid,
-                    inn_num=inn_num,
-                    raw_dir=raw_dir,
-                    delay_sec=args.delay
-                )
-
-                if c_err:
-                    logger.warning(f"Failed commentary for match {mid} inn {inn_num}: {c_err}")
-                    failed_matches[mid] = f"Commentary inn {inn_num} failed: {c_err}"
-                    inn_fetch_failed = True
-                    break
-                commentary_chunks_by_inn[inn_idx] = chunks
-
-            if inn_fetch_failed:
-                continue
-
-            # 2b. Probe Super Over commentary in fail-soft mode. ESPN serves no
-            # deliveries for these innings, so an error or an empty list leaves
-            # the scorecard-only line in place and never fails the match. Keys
-            # are separate from the 1-based regulation index.
-            super_inns = content.get("superOverInnings") or []
-            for so_idx, so_inn in enumerate(super_inns):
-                so_num = so_inn.get("inningNumber")
-                if type(so_num) is not int or so_num < 1:
-                    so_num = len(innings_list) + so_idx + 1
-                try:
-                    chunks, c_err = fetch_innings_commentary(
-                        client=client,
-                        series_id=series_id,
-                        match_id=mid,
-                        inn_num=so_num,
-                        raw_dir=raw_dir,
-                        delay_sec=args.delay
-                    )
-                except Exception as exc:  # fail-soft: scorecard-only is valid
-                    chunks, c_err = [], str(exc)
-                if c_err:
-                    logger.warning(
-                        f"Super Over commentary probe failed for match {mid} inn {so_num}: {c_err}"
-                        " (continuing with scorecard-only totals)"
-                    )
-                    chunks = []
-                commentary_chunks_by_inn[("super", so_idx)] = chunks
-
-            # 3. Construct Match v3.0
+            # 1. Fetch and store every raw payload. The raw bundle is written
+            #    to disk before anything is built, so a build failure never
+            #    costs the fetch.
             try:
-                match_v3, const_err = construct_match_v3(
-                    mid=mid,
-                    raw_details=details,
-                    commentary_chunks_by_inn=commentary_chunks_by_inn,
-                    player_profiles=player_profiles,
-                    people_registry=people_registry,
-                    venue_map=venue_map
+                details, commentary_by_inn, _fetch_meta = fetch_match_bundle(
+                    client=client,
+                    match_id=mid,
+                    raw_dir=raw_dir,
+                    delay_sec=args.delay,
                 )
-            except Exception as e:
-                logger.warning(f"Exception constructing match {mid}: {e}")
-                failed_matches[mid] = f"Construction exception: {e}"
+            except FetchBundleError as exc:
+                logger.warning(f"Failed to fetch match {mid}: {exc}")
+                failed_matches[mid] = str(exc)
                 continue
 
-            if const_err or not match_v3:
-                logger.warning(f"Failed to construct match {mid}: {const_err}")
-                failed_matches[mid] = f"Construction error: {const_err}"
-                continue
-
-            # 4. Shared schema, identity, classification and score coverage gate
-            sc_inns = (details.get('content', {}).get('innings') or []) + (
-                details.get('content', {}).get('superOverInnings') or []
+            # 2. Build the match and assign its tier in one pass.
+            result = build_match(
+                mid=mid,
+                raw_details=details,
+                commentary_chunks_by_inn=commentary_by_inn,
+                references=references,
             )
-            validation_errors = validate_match_data(match_v3,sc_inns)
+            if not result.ok:
+                logger.warning(f"Failed to build match {mid}: {result.error}")
+                failed_matches[mid] = result.error or "Unknown build failure"
+                continue
 
-            if validation_errors:
-                if not args.allow_validation_failures:
-                    logger.warning(f"Validation failed for match {mid} ({len(validation_errors)} errors): {validation_errors[:2]}")
-                    failed_matches[mid] = f"Validation errors: {'; '.join(validation_errors[:3])}"
-                    continue
-                # Quarantine path: keep the data, publish the defect, let consumers filter.
-                logger.warning(f"Quarantining match {mid} ({len(validation_errors)} validation errors)")
-                match_v3.setdefault("meta", {})
-                match_v3["meta"]["validation_status"] = "failed"
-                match_v3["meta"]["validation_errors"] = validation_errors[:25]
+            match_v3 = result.match
 
-            # 5. Optional Cricsheet Audit
+            if result.tier == "failed" and not args.allow_validation_failures:
+                logger.warning(
+                    f"Validation failed for match {mid} ({len(result.assessment.errors)} errors): "
+                    f"{result.assessment.errors[:2]}"
+                )
+                failed_matches[mid] = f"Validation errors: {'; '.join(result.assessment.errors[:3])}"
+                continue
+
+            # 3. Optional Cricsheet Audit
             if auditor and args.cricsheet_dir:
                 cs_file = Path(args.cricsheet_dir) / f"{mid}.json"
                 if cs_file.exists():
@@ -296,9 +226,9 @@ def main():
                     except Exception as e:
                         logger.warning(f"Could not run Cricsheet audit for {mid}: {e}")
 
-            # 6. Atomic write
+            # 4. Atomic write
             atomic_write_json(out_file, match_v3)
-            if match_v3.get("meta", {}).get("validation_status") == "failed":
+            if result.tier == "failed":
                 quarantined += 1
                 logger.info(f"Quarantined match {mid} -> {out_file.name}")
             else:

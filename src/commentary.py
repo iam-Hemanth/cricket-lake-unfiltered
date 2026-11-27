@@ -34,6 +34,15 @@ def canonical_match_payload(payload: Optional[dict]) -> Optional[dict]:
     return payload
 
 
+def _atomic_write_bytes(path: Path, payload: bytes):
+    """Write bytes to a temp file and atomically rename it into place."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "wb") as f:
+        f.write(payload)
+    tmp.replace(path)
+
+
 def save_raw_payload(
     raw_match_dir: Path,
     filename: str,
@@ -41,7 +50,13 @@ def save_raw_payload(
     url: str,
     status_code: int
 ):
-    """Save an unfiltered HTTP response body gzipped alongside metadata."""
+    """Save an unfiltered HTTP response body gzipped alongside metadata.
+
+    The legacy per-file ``meta.json`` map is kept for backward compatibility
+    with the batch tarballs already published. ``fetch_meta.json`` (written by
+    :func:`write_fetch_meta`) is the authoritative bundle-level record used by
+    the catalog to decide whether a match's raw payload actually changed.
+    """
     raw_match_dir.mkdir(parents=True, exist_ok=True)
     gz_path = raw_match_dir / f"{filename}.gz"
     with gzip.open(gz_path, "wb") as f:
@@ -66,6 +81,72 @@ def save_raw_payload(
     }
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
+
+
+def bundle_sha256(raw_match_dir: Path) -> str:
+    """Deterministic digest over the raw files of a match bundle.
+
+    The digest covers file names and their decompressed content, so a change
+    in any stored payload changes the digest. Two fetches of an unchanged
+    match therefore produce the same ``bundle_sha256``, which is what lets the
+    catalog skip a rebuild.
+    """
+    digest = hashlib.sha256()
+    for path in sorted(raw_match_dir.glob("*.json.gz")):
+        digest.update(path.name.encode("utf-8"))
+        digest.update(b"\0")
+        try:
+            with gzip.open(path, "rb") as f:
+                digest.update(f.read())
+        except OSError:
+            digest.update(b"<unreadable>")
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def write_fetch_meta(
+    raw_match_dir: Path,
+    match_id: str,
+    extra: Optional[dict] = None
+) -> dict:
+    """Write ``fetch_meta.json`` describing the stored raw bundle.
+
+    The file is the single source of truth for "did the raw payload change?"
+    and for the innings-number -> commentary-key mapping that the offline
+    re-parser needs to rebuild the same match the live extractor produced.
+    """
+    raw_match_dir.mkdir(parents=True, exist_ok=True)
+    files: Dict[str, dict] = {}
+    meta_path = raw_match_dir / "meta.json"
+    if meta_path.exists():
+        try:
+            raw_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            raw_meta = {}
+        if isinstance(raw_meta, dict):
+            for name, record in raw_meta.items():
+                if not isinstance(record, dict):
+                    continue
+                files[str(name)] = {
+                    "url": record.get("url"),
+                    "status_code": record.get("status_code"),
+                    "sha256": record.get("sha256"),
+                    "bytes_length": record.get("bytes_length"),
+                }
+
+    payload = {
+        "match_id": str(match_id),
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "files": files,
+        "bundle_sha256": bundle_sha256(raw_match_dir),
+    }
+    if extra:
+        payload.update(extra)
+    _atomic_write_bytes(
+        raw_match_dir / "fetch_meta.json",
+        json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8"),
+    )
+    return payload
 
 def fetch_match_details(
     client: CricinfoClient,
@@ -138,16 +219,29 @@ def fetch_innings_commentary(
     match_id: str,
     inn_num: int,
     raw_dir: Optional[Path] = None,
-    delay_sec: float = 0.5
+    delay_sec: float = 0.5,
+    chunk_prefix: str = "commentary_inn",
+    chunk_label: Optional[int] = None
 ) -> Tuple[List[dict], Optional[str]]:
     """
     Fetch complete over-by-over commentary for an innings.
     Saves unfiltered raw chunks to raw_dir if specified.
+
+    ``chunk_prefix`` selects the on-disk naming scheme. Regulation innings use
+    ``commentary_inn<N>_chunk<M>``; Super Over innings use
+    ``commentary_super<N>_chunk<M>`` so a Super Over inning number can never
+    overwrite a regulation chunk that happens to carry the same number.
+
+    ``chunk_label`` is the number written into the file name. It defaults to
+    the inning number used for the API call, but a Super Over innings is
+    stored under its 0-based position in ``content.superOverInnings`` so the
+    offline loader can restore the ``("super", index)`` key exactly.
     """
     all_chunks = []
     seen_overs = set()
     next_over = None
     chunk_idx = 0
+    label = inn_num if chunk_label is None else chunk_label
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -172,7 +266,7 @@ def fetch_innings_commentary(
         if raw_dir:
             save_raw_payload(
                 raw_dir / str(match_id),
-                f"commentary_inn{inn_num}_chunk{chunk_idx}.json",
+                f"{chunk_prefix}{label}_chunk{chunk_idx}.json",
                 content_bytes,
                 url,
                 r.status_code
@@ -199,10 +293,167 @@ def fetch_innings_commentary(
     return all_chunks, None
 
 
-def load_raw_match_payloads(raw_match_dir: Path) -> Tuple[Optional[dict], Dict[int, List[dict]], Optional[str]]:
+class FetchBundleError(Exception):
+    """A fetch failed in a way that the caller must record."""
+
+    def __init__(self, message: str, kind: str = "transient_fetch"):
+        super().__init__(message)
+        self.kind = kind
+
+
+def fetch_match_bundle(
+    client: CricinfoClient,
+    match_id: str,
+    raw_dir: Optional[Path] = None,
+    delay_sec: float = 0.5,
+) -> Tuple[Optional[dict], Dict[object, List[dict]], dict]:
+    """Fetch a match and store every raw payload it produced.
+
+    This is the only place the lake talks to ESPN. The raw payloads are
+    written to ``raw_dir`` as they arrive, so a bundle that later fails to
+    build is still recoverable offline. That is the property the whole
+    raw-first design rests on: no fetch may be lost because the build failed.
+
+    Returns ``(raw_details, commentary_chunks_by_inn, fetch_meta)``. On
+    failure it raises :class:`FetchBundleError` with an explicit failure kind
+    rather than returning an error string, so the caller never has to guess
+    what went wrong from the wording of a message.
+    """
+    details, err = fetch_match_details(
+        client=client,
+        match_id=match_id,
+        raw_dir=raw_dir,
+        delay_sec=delay_sec,
+    )
+    if err or not details:
+        raise FetchBundleError(f"Details fetch failed: {err}")
+
+    match_info = details.get("match") or {}
+    content = details.get("content") or {}
+    series_id = str(
+        (match_info.get("series") or {}).get("objectId")
+        or (match_info.get("series") or {}).get("id")
+        or ""
+    )
+
+    innings_list = content.get("innings") or []
+    commentary_by_inn: Dict[object, List[dict]] = {}
+
+    for inn_idx, inn in enumerate(innings_list, 1):
+        inn_num = inn.get("inningNumber") or inn_idx
+        chunks, c_err = fetch_innings_commentary(
+            client=client,
+            series_id=series_id,
+            match_id=match_id,
+            inn_num=inn_num,
+            raw_dir=raw_dir,
+            delay_sec=delay_sec,
+        )
+        if c_err:
+            raise FetchBundleError(f"Commentary inn {inn_num} failed: {c_err}")
+        commentary_by_inn[inn_idx] = chunks
+
+    # Super Over innings are probed in fail-soft mode: ESPN serves no
+    # deliveries for them, so an error leaves the scorecard-only line in
+    # place and never fails the match.
+    for so_idx, so_inn in enumerate(content.get("superOverInnings") or []):
+        so_num = so_inn.get("inningNumber")
+        if type(so_num) is not int or so_num < 1:
+            so_num = len(innings_list) + so_idx + 1
+        try:
+            chunks, c_err = fetch_innings_commentary(
+                client=client,
+                series_id=series_id,
+                match_id=match_id,
+                inn_num=so_num,
+                raw_dir=raw_dir,
+                delay_sec=delay_sec,
+                chunk_prefix="commentary_super",
+                chunk_label=so_idx,
+            )
+        except Exception as exc:
+            chunks, c_err = [], str(exc)
+        if c_err:
+            chunks = []
+        commentary_by_inn[("super", so_idx)] = chunks
+
+    fetch_meta: dict = {}
+    if raw_dir is not None:
+        fetch_meta = write_fetch_meta(
+            raw_dir / str(match_id),
+            str(match_id),
+            extra={
+                "series_id": series_id or None,
+                "raw_innings_map": {
+                    str(inn.get("inningNumber") or idx): idx
+                    for idx, inn in enumerate(innings_list, 1)
+                    if isinstance(inn, dict)
+                },
+            },
+        )
+
+    return details, commentary_by_inn, fetch_meta
+
+
+def load_fetch_meta(raw_match_dir: Path) -> dict:
+    """Read ``fetch_meta.json`` if the bundle carries one."""
+    meta_path = raw_match_dir / "fetch_meta.json"
+    if not meta_path.exists():
+        return {}
+    try:
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _regulation_key_map(raw_details: dict, fetch_meta: dict) -> Dict[int, int]:
+    """Map the inning number used on the wire to the 1-based innings index.
+
+    The constructor keys regulation commentary by the *position* of the
+    innings in ``content.innings`` (``1, 2, ...``), while the commentary API
+    is queried with the *inning number*. The two differ whenever ESPN skips
+    or renumbers innings, so the mapping must be restored rather than assumed.
+    """
+    innings = ((raw_details or {}).get("content") or {}).get("innings") or []
+
+    # 1. An explicit map recorded at fetch time is authoritative.
+    explicit = (fetch_meta or {}).get("raw_innings_map")
+    if isinstance(explicit, dict):
+        resolved: Dict[int, int] = {}
+        for number, index in explicit.items():
+            try:
+                resolved[int(number)] = int(index)
+            except (TypeError, ValueError):
+                continue
+        if resolved:
+            return resolved
+
+    # 2. Fall back to matching the inning number against the scorecard.
+    numbers = [
+        inn.get("inningNumber") for inn in innings
+        if isinstance(inn, dict)
+    ]
+    mapping: Dict[int, int] = {}
+    for position, number in enumerate(numbers, 1):
+        if type(number) is int and number >= 1 and number not in mapping:
+            mapping[number] = position
+    # 3. A number with no scorecard counterpart keeps its own position.
+    for position, number in enumerate(numbers, 1):
+        if type(number) is not int:
+            mapping.setdefault(position, position)
+    return mapping
+
+
+def load_raw_match_payloads(raw_match_dir: Path) -> Tuple[Optional[dict], Dict[object, List[dict]], Optional[str]]:
     """
     Load raw match payloads from raw_match_dir (gzipped json files).
     Returns: (raw_details, commentary_chunks_by_inn, error_str)
+
+    ``commentary_chunks_by_inn`` uses exactly the keys the constructor
+    expects: ``1, 2, ...`` for regulation innings (1-based position in
+    ``content.innings``) and ``("super", index)`` for Super Over innings
+    (0-based position in ``content.superOverInnings``).
     """
     import re
     sc_path = raw_match_dir / "scorecard.json.gz"
@@ -215,18 +466,35 @@ def load_raw_match_payloads(raw_match_dir: Path) -> Tuple[Optional[dict], Dict[i
     except Exception as e:
         return None, {}, f"Failed to read scorecard.json.gz: {e}"
 
-    commentary_by_inn: Dict[int, List[dict]] = {}
-    chunk_files = sorted(raw_match_dir.glob("commentary_inn*_chunk*.json.gz"))
-    for cf in chunk_files:
+    fetch_meta = load_fetch_meta(raw_match_dir)
+    regulation_map = _regulation_key_map(raw_details, fetch_meta)
+
+    commentary_by_inn: Dict[object, List[dict]] = {}
+    for cf in sorted(raw_match_dir.glob("commentary_inn*_chunk*.json.gz")):
         m = re.search(r"commentary_inn(\d+)_chunk", cf.name)
         if not m:
             continue
         inn_num = int(m.group(1))
+        key = regulation_map.get(inn_num, inn_num)
         try:
             with gzip.open(cf, "rt", encoding="utf-8") as f:
                 chunk_data = json.load(f)
                 comments = chunk_data.get("comments") or []
-                commentary_by_inn.setdefault(inn_num, []).extend(comments)
+                commentary_by_inn.setdefault(key, []).extend(comments)
+        except Exception as e:
+            return raw_details, commentary_by_inn, f"Failed to read chunk {cf.name}: {e}"
+
+    for cf in sorted(raw_match_dir.glob("commentary_super*_chunk*.json.gz")):
+        m = re.search(r"commentary_super(\d+)_chunk", cf.name)
+        if not m:
+            continue
+        so_num = int(m.group(1))
+        key = ("super", so_num)
+        try:
+            with gzip.open(cf, "rt", encoding="utf-8") as f:
+                chunk_data = json.load(f)
+                comments = chunk_data.get("comments") or []
+                commentary_by_inn.setdefault(key, []).extend(comments)
         except Exception as e:
             return raw_details, commentary_by_inn, f"Failed to read chunk {cf.name}: {e}"
 

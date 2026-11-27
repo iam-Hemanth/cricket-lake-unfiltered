@@ -473,6 +473,381 @@ V3_3_META_FIELDS={'source_competition_trophy_id','source_classification_presence
 V3_3_INN_FIELDS={'source_scorecard','innings_penalty_runs','penalty_adjustment_source','penalty_adjustment_status'}
 V3_3_DELIVERY_FIELDS={'source_actual_delivery','source_ball_number','source_unique_marker'}
 
+# ---------------------------------------------------------------------------
+# Structured assessment
+#
+# The validator used to answer one question ("does this match pass?"), and the
+# tier of a match was decided afterwards by post-hoc policy scripts that parsed
+# the human-readable error strings. That split produced two classes of drift:
+# the warn tier could not be re-derived at all, because the validator's own
+# tolerance had been relaxed past the threshold that created the tier, and the
+# source-gap tier could be revoked by an unrelated error appearing later.
+#
+# The assessment below keeps one authoritative reading of a match and derives
+# the tier from it in a single pass.
+# ---------------------------------------------------------------------------
+
+#: Running-total drift beyond this many runs is a disagreement, not a typo.
+DRIFT_LIMIT = 2
+
+#: The largest drift the published warn corpus contains (46 runs); the
+#: validator's own cap sits at 50 so a grossly corrupt counter still fails.
+DRIFT_CAP = 50
+
+#: Failure kinds, never inferred from the wording of an error message.
+FAILURE_TRANSIENT_FETCH = "transient_fetch"
+FAILURE_UNCOMPLETED_MATCH = "uncompleted_match"
+FAILURE_CONSTRUCTION_ERROR = "construction_error"
+FAILURE_VALIDATION_FAILED = "validation_failed"
+
+#: Issues that describe a small, disclosed disagreement between the
+#: ball-by-ball record and the source scorecard.
+SOURCE_GAP_CODES = (
+    "SCORECARD_WICKETS_MISMATCH",
+    "LEGAL_BALL_COVERAGE_MISMATCH",
+    "EXACT_RUNS_MISMATCH",
+    "TOTAL_EXTRAS_MISMATCH",
+    "UNRECOGNIZED_DISMISSAL_KIND",
+    "SCORECARD_RUNS_MISMATCH",
+    "OVER_LENGTH_PAIRED",
+)
+
+_SOURCE_GAP_PREFIXES = (
+    "Scorecard wickets mismatch:",
+    "Source scorecard legal-ball coverage mismatch",
+    "Source scorecard exact runs mismatch",
+    "Total extras mismatch:",
+    "Unrecognized dismissal kind:",
+    "Scorecard runs mismatch:",
+)
+
+
+class ValidationIssue:
+    """A single structured validation finding.
+
+    ``code`` is the stable identifier callers branch on; ``message`` is the
+    human-readable text kept for disclosure; ``detail`` carries the values
+    that produced the finding.
+    """
+
+    __slots__ = ("code", "message", "detail", "tier")
+
+    def __init__(self, code: str, message: str, detail: Optional[dict] = None,
+                 tier: str = "error"):
+        self.code = code
+        self.message = message
+        self.detail = detail or {}
+        self.tier = tier
+
+    def to_dict(self) -> dict:
+        payload = {"code": self.code, "message": self.message, "tier": self.tier}
+        if self.detail:
+            payload["detail"] = self.detail
+        return payload
+
+    def __repr__(self) -> str:
+        return f"ValidationIssue({self.code!r}, {self.message!r})"
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, ValidationIssue):
+            return NotImplemented
+        return (self.code, self.message, self.detail, self.tier) == (
+            other.code, other.message, other.detail, other.tier)
+
+    def __hash__(self) -> int:
+        return hash((self.code, self.message, self.tier))
+
+
+class MatchAssessment:
+    """The tier of a match and the findings that produced it."""
+
+    __slots__ = ("tier", "errors", "warnings", "issues", "source_gap", "failure_kind")
+
+    def __init__(self, tier: str, errors: Optional[List[str]] = None,
+                 warnings: Optional[List[str]] = None,
+                 issues: Optional[List[ValidationIssue]] = None,
+                 source_gap: Optional[dict] = None,
+                 failure_kind: Optional[str] = None):
+        self.tier = tier
+        self.errors = list(errors or [])
+        self.warnings = list(warnings or [])
+        self.issues = list(issues or [])
+        self.source_gap = source_gap
+        self.failure_kind = failure_kind
+
+    @property
+    def is_publishable(self) -> bool:
+        """Whether the tier is admitted to the published lake."""
+        return self.tier in ("clean", "warning", "source_gap")
+
+    def to_dict(self) -> dict:
+        payload = {"tier": self.tier, "errors": self.errors, "warnings": self.warnings}
+        if self.source_gap is not None:
+            payload["source_gap"] = self.source_gap
+        if self.failure_kind is not None:
+            payload["failure_kind"] = self.failure_kind
+        return payload
+
+    def __repr__(self) -> str:
+        return f"MatchAssessment({self.tier!r}, errors={len(self.errors)}, warnings={len(self.warnings)})"
+
+
+def _reconciling_innings(match: dict) -> List[Tuple[int, dict]]:
+    """Innings whose ball-by-ball total agrees with the source scorecard.
+
+    An innings that reconciles can still carry a wrong *running* counter: the
+    per-ball commentary total disagrees with the scorecard while the innings
+    total is right. That disagreement is advisory (warn tier) rather than a
+    contradiction, because the two sources describe the same game.
+    """
+    out: List[Tuple[int, dict]] = []
+    for index, inn in enumerate(match.get("innings") or []):
+        snapshot = inn.get("source_scorecard") or {}
+        deliveries = [
+            d for ov in inn.get("overs") or [] for d in ov.get("deliveries") or []
+        ]
+        if not deliveries:
+            continue
+        final = (
+            sum(d.get("runs", {}).get("total", 0) for d in deliveries)
+            + (inn.get("innings_penalty_runs") or 0)
+        )
+        if snapshot.get("runs") is not None and final == snapshot.get("runs"):
+            out.append((index, inn))
+    return out
+
+
+def _innings_drift(inn: dict, limit: int) -> Optional[Tuple[str, int, int]]:
+    """First running-total drift beyond ``limit`` in one innings.
+
+    Returns ``(ball_marker, calculated, source_total)`` or None.
+    """
+    calc = 0
+    for delivery in [d for ov in inn.get("overs") or [] for d in ov.get("deliveries") or []]:
+        calc += delivery.get("runs", {}).get("total", 0)
+        marker = delivery.get("total_inning_runs")
+        if marker is None or marker <= 0:
+            continue
+        if abs(calc - marker) > limit:
+            return (delivery.get("actual_delivery"), calc, marker)
+    return None
+
+
+def _drift_message(drift: Tuple[str, int, int]) -> str:
+    ball, calc, marker = drift
+    return f"Running score mismatch at Ball {ball}: calculated {calc} != Cricinfo {marker}"
+
+
+def _innings_drift_profile(match: dict) -> List[dict]:
+    """Per-innings drift analysis used to classify a match.
+
+    Each innings is described by whether its total reconciles with the source
+    scorecard, the drift the validator itself would report for it, the
+    advisory drift (only meaningful for a reconciling innings) and the largest
+    drift seen.
+    """
+    profile: List[dict] = []
+    for inn in match.get("innings") or []:
+        deliveries = [d for ov in inn.get("overs") or [] for d in ov.get("deliveries") or []]
+        if not deliveries:
+            continue
+        snapshot = inn.get("source_scorecard") or {}
+        final = (
+            sum(d.get("runs", {}).get("total", 0) for d in deliveries)
+            + (inn.get("innings_penalty_runs") or 0)
+        )
+        reconciles = snapshot.get("runs") is not None and final == snapshot.get("runs")
+        cap = DRIFT_CAP if reconciles else 2
+        validator_drift = _innings_drift(inn, cap)
+        advisory_drift = _innings_drift(inn, DRIFT_LIMIT) if reconciles else None
+        worst = 0
+        calc = 0
+        for delivery in deliveries:
+            calc += delivery.get("runs", {}).get("total", 0)
+            marker = delivery.get("total_inning_runs")
+            if marker is not None and marker > 0:
+                worst = max(worst, abs(calc - marker))
+        profile.append({
+            "reconciles": reconciles,
+            "validator_drift": validator_drift,
+            "advisory_drift": advisory_drift,
+            "worst_drift": worst,
+        })
+    return profile
+
+
+def measure_drift(match: dict, limit: int = DRIFT_LIMIT) -> List[str]:
+    """Running-total drift messages for innings that reconcile with the source.
+
+    This measurement is independent of the validator's own tolerance. The
+    validator tolerates drift up to ``DRIFT_CAP`` in a reconciling innings, so
+    a match admitted at the warn tier passes the validator and no error string
+    survives to mark it. The drift has to be measured directly for the tier to
+    be re-derivable.
+    """
+    messages: List[str] = []
+    for entry in _innings_drift_profile(match):
+        if entry["advisory_drift"] is not None:
+            messages.append(_drift_message(entry["advisory_drift"]))
+    return messages
+
+
+def _is_source_gap_message(message: str) -> bool:
+    if message.startswith(_SOURCE_GAP_PREFIXES):
+        return True
+    if message.startswith("Inn ") and "legal balls (expected" in message:
+        return True
+    # An absent non-striker id is an optional-field gap, already counted in
+    # meta.missing_non_striker_deliveries. It does not contradict the source.
+    if message.startswith("Participant identity issue") and "'field': 'non_striker_id'" in message:
+        return True
+    return False
+
+
+def over_lengths_ok(innings: List[dict], balls_per_over: int) -> Tuple[bool, str]:
+    """Whether every over length is explainable by an adjacent pairing."""
+    for inn in innings:
+        counts = [
+            sum(1 for d in over.get("deliveries") or [] if d.get("is_legal"))
+            for over in inn.get("overs") or []
+        ]
+        if not counts:
+            continue
+        for index, count in enumerate(counts):
+            if count == balls_per_over:
+                continue
+            if index == len(counts) - 1:
+                continue  # a short final over is normal
+            if balls_per_over - 1 <= count <= balls_per_over + 2:
+                continue  # the validator tolerates this range for a non-final over
+            if count == 2 * balls_per_over:
+                continue  # two source overs merged under one number
+            paired = (
+                (index > 0 and counts[index - 1] + count == 2 * balls_per_over)
+                or (index + 1 < len(counts) and count + counts[index + 1] == 2 * balls_per_over)
+            )
+            if not paired:
+                return False, f"inn {inn.get('innings_number')} over {index} has {count} legal balls with no adjacent pair"
+    return True, ""
+
+
+def source_gap_detail(match: dict, errors: List[str]) -> Optional[dict]:
+    """Summarise a source-gap match, or return None when it does not qualify."""
+    total_legal = total_runs = total_wickets = 0
+    for inn in match.get("innings") or []:
+        snapshot = inn.get("source_scorecard") or {}
+        if (snapshot.get("balls") is None or snapshot.get("runs") is None
+                or snapshot.get("wickets") is None):
+            return None
+        deliveries = [
+            d for ov in inn.get("overs") or [] for d in ov.get("deliveries") or []
+        ]
+        legal = sum(1 for d in deliveries if d.get("is_legal"))
+        runs = (sum(d.get("runs", {}).get("total", 0) for d in deliveries)
+                + (inn.get("innings_penalty_runs") or 0))
+        wickets = sum(len(d.get("wickets") or []) for d in deliveries)
+        total_legal += abs(legal - snapshot["balls"])
+        total_runs += abs(runs - snapshot["runs"])
+        total_wickets += abs(wickets - snapshot["wickets"])
+    if total_legal > 2 or total_runs > 2 or total_wickets > 1:
+        return None
+    balls_per_over = (match.get("meta") or {}).get("balls_per_over") or 6
+    ok, _reason = over_lengths_ok(match.get("innings") or [], int(balls_per_over))
+    if not ok:
+        return None
+    return {
+        "legal_ball_delta": total_legal,
+        "runs_delta": total_runs,
+        "wicket_delta": total_wickets,
+        "error_count": len(errors),
+    }
+
+
+def assess_match(match: dict, scorecard_innings: Optional[List[dict]] = None) -> MatchAssessment:
+    """Assign a match its final tier in a single pass.
+
+    ``clean``
+        No issues at all.
+    ``warning``
+        Only advisory running-total drift: the per-ball counter disagrees with
+        the scorecard while the innings total reconciles.
+    ``source_gap``
+        Every hard issue is one of the disclosed source-gap shapes and the
+        disagreement stays inside the published thresholds.
+    ``failed``
+        Anything else.
+
+    The tier is decided per innings, because the two sources can disagree
+    about different innings in different ways. An innings that reconciles with
+    the scorecard may carry an advisory running counter; an innings that does
+    not reconcile is a contradiction. The match-level verdict follows from the
+    combination.
+    """
+    errors = list(validate_match_data(match, scorecard_innings))
+    profile = _innings_drift_profile(match)
+
+    # The validator reports a drift for an innings whose counter is wrong. It
+    # uses a loose cap for an innings that reconciles and a strict one for an
+    # innings that does not, so its message identifies which kind of innings
+    # the drift belongs to.
+    validator_drift_messages = {
+        _drift_message(entry["validator_drift"])
+        for entry in profile if entry["validator_drift"] is not None
+    }
+    hard = [message for message in errors if message not in validator_drift_messages]
+
+    advisory_messages = [
+        _drift_message(entry["advisory_drift"])
+        for entry in profile if entry["advisory_drift"] is not None
+    ]
+
+    if not errors:
+        if advisory_messages:
+            issues = [ValidationIssue("COMMENTARY_DRIFT_RECONCILED", message, tier="warning")
+                      for message in advisory_messages]
+            return MatchAssessment("warning", errors=[], warnings=advisory_messages, issues=issues)
+        return MatchAssessment("clean", errors=[], warnings=[], issues=[])
+
+    # A hard error in an innings that reconciles is still a contradiction: the
+    # innings agrees with the scorecard on its total, so a disagreeing ball
+    # count or wicket count cannot be explained by the counter being wrong.
+    if all(_is_source_gap_message(message) for message in hard):
+        detail = source_gap_detail(match, hard)
+        if detail is not None:
+            issues = [ValidationIssue(_source_gap_code(message), message) for message in hard]
+            issues += [ValidationIssue("COMMENTARY_DRIFT_RECONCILED", message, tier="warning")
+                       for message in advisory_messages]
+            return MatchAssessment("source_gap", errors=[], warnings=list(hard),
+                                   issues=issues, source_gap=detail)
+
+    issues = [ValidationIssue(_source_gap_code(message) if _is_source_gap_message(message)
+                              else "VALIDATION_FAILED", message) for message in hard]
+    issues += [ValidationIssue("COMMENTARY_DRIFT_RECONCILED", message, tier="warning")
+               for message in advisory_messages]
+    return MatchAssessment("failed", errors=list(hard), warnings=list(advisory_messages),
+                           issues=issues, failure_kind=FAILURE_VALIDATION_FAILED)
+
+
+def _source_gap_code(message: str) -> str:
+    """Stable code for a source-gap shaped message."""
+    if message.startswith("Scorecard wickets mismatch:"):
+        return "SCORECARD_WICKETS_MISMATCH"
+    if message.startswith("Source scorecard legal-ball coverage mismatch"):
+        return "LEGAL_BALL_COVERAGE_MISMATCH"
+    if message.startswith("Source scorecard exact runs mismatch"):
+        return "EXACT_RUNS_MISMATCH"
+    if message.startswith("Total extras mismatch:"):
+        return "TOTAL_EXTRAS_MISMATCH"
+    if message.startswith("Unrecognized dismissal kind:"):
+        return "UNRECOGNIZED_DISMISSAL_KIND"
+    if message.startswith("Scorecard runs mismatch:"):
+        return "SCORECARD_RUNS_MISMATCH"
+    if message.startswith("Inn ") and "legal balls (expected" in message:
+        return "OVER_LENGTH_PAIRED"
+    if message.startswith("Participant identity issue"):
+        return "MISSING_OPTIONAL_NON_STRIKER"
+    return "SOURCE_GAP_OTHER"
+
 
 def validate_inventory_candidate(match: dict) -> List[str]:
     """Genuine v3.0 is explicitly unverified; modern-shaped downgrades fail closed."""

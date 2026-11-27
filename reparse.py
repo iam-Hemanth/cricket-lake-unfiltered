@@ -2,9 +2,12 @@
 """
 reparse.py
 Offline Re-parser CLI for ESPNcricinfo Data Lake.
-Reads raw gzipped HTTP payloads from disk, parses Match JSON v3.0,
-validates integrity, and optionally tests parsing determinism.
-ZERO network calls - operates 100% offline.
+
+Reads raw gzipped HTTP payloads from disk and rebuilds the Match JSON through
+the shared builder. ZERO network calls - operates 100% offline.
+
+The build step is the same ``src.builder.build_match`` the live extractor
+uses, so a parser change produces the same match whichever path runs.
 """
 import argparse
 import csv
@@ -14,9 +17,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.builder import References, build_match
 from src.commentary import load_raw_match_payloads
-from src.constructor import construct_match_v3
-from src.validator import validate_match_data
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,7 +28,8 @@ logging.basicConfig(
 logger = logging.getLogger("reparser")
 
 
-def load_references(repo_root: Path) -> Tuple[dict, dict, dict]:
+def load_references(repo_root: Path) -> References:
+    """Load player profiles, people registry, and venue mappings."""
     profiles_path = repo_root / "data" / "player_profiles_cache.json"
     player_profiles = {}
     if profiles_path.exists():
@@ -50,7 +53,11 @@ def load_references(repo_root: Path) -> Tuple[dict, dict, dict]:
                 if cricinfo_id and cid:
                     people_registry[str(cricinfo_id)] = cid
 
-    return player_profiles, people_registry, venue_map
+    return References(
+        player_profiles=player_profiles,
+        people_registry=people_registry,
+        venue_map=venue_map,
+    )
 
 
 def main():
@@ -76,7 +83,7 @@ def main():
         logger.error(f"Raw directory not found: {raw_dir}")
         sys.exit(1)
 
-    player_profiles, people_registry, venue_map = load_references(repo_root)
+    references = load_references(repo_root)
 
     # Determine match directories to reparse
     if args.match_ids or args.ids_file:
@@ -122,52 +129,43 @@ def main():
             failed += 1
             continue
 
-        match_v3, const_err = construct_match_v3(
+        result = build_match(
             mid=mid,
             raw_details=details,
             commentary_chunks_by_inn=chunks_by_inn,
-            player_profiles=player_profiles,
-            people_registry=people_registry,
-            venue_map=venue_map
+            references=references,
         )
-        if const_err or not match_v3:
-            logger.warning(f"Failed to construct match {mid}: {const_err}")
-            failed_matches[mid] = f"Construction error: {const_err}"
+        if not result.ok:
+            logger.warning(f"Failed to build match {mid}: {result.error}")
+            failed_matches[mid] = result.error or "Unknown build failure"
             failed += 1
             continue
+
+        match_v3 = result.match
 
         # Determinism check
         if args.verify_determinism:
             determinism_checks += 1
-            match_v3_second, _ = construct_match_v3(
+            second = build_match(
                 mid=mid,
                 raw_details=details,
                 commentary_chunks_by_inn=chunks_by_inn,
-                player_profiles=player_profiles,
-                people_registry=people_registry,
-                venue_map=venue_map
+                references=references,
             )
             dump1 = json.dumps(match_v3, sort_keys=True)
-            dump2 = json.dumps(match_v3_second, sort_keys=True)
+            dump2 = json.dumps(second.match, sort_keys=True)
             if dump1 != dump2:
                 logger.error(f"DETERMINISM FAILED on match {mid}: Two parse passes yielded different output!")
                 determinism_failures += 1
             else:
                 logger.info(f"Determinism verified for match {mid} ✓")
 
-        # Shared schema, scoring, and participant gate.
-        validation_errors = validate_match_data(match_v3, (details.get("content") or {}).get("innings") or [])
-
-        if validation_errors:
+        if result.tier == "failed":
             if not args.allow_validation_failures:
-                logger.warning(f"Validation failed for match {mid}: {validation_errors[:2]}")
-                failed_matches[mid] = f"Validation errors: {'; '.join(validation_errors[:3])}"
+                logger.warning(f"Validation failed for match {mid}: {result.assessment.errors[:2]}")
+                failed_matches[mid] = f"Validation errors: {'; '.join(result.assessment.errors[:3])}"
                 failed += 1
                 continue
-            logger.warning(f"Quarantining match {mid} ({len(validation_errors)} validation errors)")
-            match_v3.setdefault("meta", {})
-            match_v3["meta"]["validation_status"] = "failed"
-            match_v3["meta"]["validation_errors"] = validation_errors[:25]
             quarantined_ids.add(str(mid))
 
         # Write output file
@@ -176,9 +174,7 @@ def main():
         with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(match_v3, f, indent=2, ensure_ascii=False)
         temp_file.replace(out_file)
-        if str(mid) in quarantined_ids:
-            pass
-        else:
+        if str(mid) not in quarantined_ids:
             succeeded += 1
 
     if failed_matches:
