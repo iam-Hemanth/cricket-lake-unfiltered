@@ -88,6 +88,19 @@ python scripts/pipeline_publish.py --workdir publish_work --out published
 python scripts/pipeline_compact.py --workdir compact_work --upload
 ```
 
+## The published snapshot
+
+`publish.yml` builds one snapshot from the catalog: the built matches the
+catalog names, the master archive, `matches_index.csv` and
+`lake_manifest.json`. The download catalog, the slices and the dated
+calendar are all built **from that snapshot alone**.
+
+The previous arrangement extracted the master archive and then overlaid the
+delta archives on top of it, in three places with three different orderings.
+A match could end up with a different body depending on which archives
+happened to be present. The snapshot is already resolved, so there is no
+ordering to get wrong.
+
 ## The validation tiers
 
 A match's tier is assigned in one pass by `src/validator.py:assess_match()`.
@@ -97,7 +110,13 @@ A match's tier is assigned in one pass by `src/validator.py:assess_match()`.
 | `clean` | No issues | Yes |
 | `warning` | The per-ball running counter disagrees with the scorecard, but the innings total reconciles | Yes, with `meta.validation_warnings` |
 | `source_gap` | The ball-by-ball and the scorecard differ by a small, disclosed amount | Yes, with `meta.validation_warnings` and `meta.source_gap` |
+| `scorecard_only` | ESPN published the scorecard but no ball-by-ball commentary | Yes, with `meta.validation_warnings` |
 | `failed` | A real contradiction | No |
+
+A quarter of the raw bundles hold a scorecard but no commentary. Those
+matches are admitted at the `scorecard_only` tier rather than dropped: the
+record is not corrupt, it simply has no deliveries, and rejecting it would
+drop a match ESPN really did publish.
 
 The tier is decided **per innings**, because the scorecard and the ball-by-ball
 can disagree about different innings in different ways. A running-counter
