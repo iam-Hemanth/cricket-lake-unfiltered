@@ -247,5 +247,89 @@ class PipelineIntegrationTests(unittest.TestCase):
         self.assertIsNotNone(row["next_refresh_at"])
 
 
+class IngestCommitTests(unittest.TestCase):
+    """The commit step must run, not just import."""
+
+    def test_the_commit_step_writes_the_packs_and_the_catalog(self):
+        """The commit step is the one that publishes a fetch.
+
+        It had a call to a function that did not exist, so it would have
+        raised on every run and no fetch would ever have reached the lake.
+        """
+        import argparse
+        import json
+        import tempfile
+
+        from scripts.pipeline_ingest import run_commit
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            raw_root = work / "raw"
+            built_root = work / "built"
+            raw_root.mkdir(parents=True)
+            built_root.mkdir(parents=True)
+
+            payload = details()
+            payload["content"]["innings"][0].update(
+                runs=0, wickets=0, balls=1, penalties=0,
+                wides=0, noballs=0, byes=0, legbyes=0,
+            )
+            match_dir = raw_root / "100"
+            match_dir.mkdir()
+            save_raw_payload(
+                match_dir, "scorecard.json",
+                json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                "u", 200,
+            )
+            save_raw_payload(
+                match_dir, "commentary_inn1_chunk0.json",
+                json.dumps({"comments": [ball()]}).encode("utf-8"), "u", 200,
+            )
+            write_fetch_meta(match_dir, "100")
+
+            from src.builder import References, build_match
+            from src.commentary import load_raw_match_payloads
+            details_, chunks, _ = load_raw_match_payloads(match_dir)
+            result = build_match("100", details_, chunks, References())
+            (built_root / "100.json").write_text(
+                json.dumps(result.match, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+
+            (work / "chunk_results_0.json").write_text(json.dumps([{
+                "match_id": "100",
+                "status": "ok",
+                "tier": result.tier,
+                "parser_version": "3.3.1-unified",
+                "schema_version": "3.3.0",
+                "completeness_gaps": [],
+                "maturity_state": "settled",
+            }]), encoding="utf-8")
+            (work / "ingest_plan.json").write_text(json.dumps({
+                "stamp": "20261127T120000Z",
+                "total_selected": 1,
+                "deferred": 0,
+                "chunks": [{"chunk": 0, "match_ids": ["100"]}],
+            }), encoding="utf-8")
+
+            args = argparse.Namespace(
+                workdir=str(work), repo="example/repo", upload=False,
+            )
+            self.assertEqual(run_commit(args), 0)
+
+            self.assertTrue((work / "raw_pack_20261127T120000Z.tar.gz").exists())
+            self.assertTrue((work / "built_pack_20261127T120000Z.tar.gz").exists())
+            catalog_path = work / "lake_catalog.sqlite.gz"
+            self.assertTrue(catalog_path.exists())
+
+            connection = catalog_db.load_catalog_gz(catalog_path)
+            self.addCleanup(connection.close)
+            row = catalog_db.get_match(connection, "100")
+            self.assertIsNotNone(row)
+            self.assertEqual(row["raw_available"], 1)
+            self.assertEqual(row["raw_archive"], "raw_pack_20261127T120000Z.tar.gz")
+            self.assertEqual(row["built_archive"], "built_pack_20261127T120000Z.tar.gz")
+            self.assertEqual(row["validation_tier"], result.tier)
+
+
 if __name__ == "__main__":
     unittest.main()
