@@ -193,6 +193,17 @@ class DownstreamImmutabilityTests(unittest.TestCase):
                 f"{path.name} still overlays a recovery batch.",
             )
 
+    def test_the_downstream_code_does_not_overlay_delta_archives(self):
+        """The published snapshot is already resolved; nothing may be layered on it."""
+        for path in self._downstream_files():
+            text = _read(path)
+            for token in ("lake_delta_", "overlay_deltas", "_overlay_selected"):
+                self.assertNotIn(
+                    token, text,
+                    f"{path.name} still overlays {token!r} onto the published "
+                    "snapshot. The snapshot is the resolved result.",
+                )
+
 
 class BuilderContractTests(unittest.TestCase):
     """There is one build path, and it records its version."""

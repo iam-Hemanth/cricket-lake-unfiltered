@@ -8,7 +8,6 @@ from scripts.downloads.metadata import (
     CompetitionRegistry,
     TeamRegistry,
     derive_level,
-    delta_stamp,
     enrich,
     format_family,
 )
@@ -65,11 +64,6 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(row["competition_id"], "ipl")
         self.assertEqual(row["team_ids"], "chennai_super_kings|mumbai_indians")
         self.assertEqual(row["year"], 2026)
-
-    def test_delta_stamp_handles_old_and_new_names(self):
-        self.assertEqual(delta_stamp("lake_delta_20261025T20.tar.gz").hour, 20)
-        self.assertEqual(delta_stamp("lake_delta_20261026T120000Z-123.tar.gz").minute, 0)
-        self.assertIsNone(delta_stamp("nope.tar.gz"))
 
 
 class SliceTests(unittest.TestCase):

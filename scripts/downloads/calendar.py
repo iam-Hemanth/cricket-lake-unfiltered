@@ -54,7 +54,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Build calendar.json and m/<id>.json.gz")
     parser.add_argument("--plan-dir", required=True, type=Path)
     parser.add_argument("--master-tar", required=True, type=Path)
-    parser.add_argument("--deltas-dir", type=Path, default=None)
     parser.add_argument("--fragments-dir", type=Path, default=None)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--limit", type=int, default=0, help="Only write the first N match files (tests)")
@@ -121,14 +120,8 @@ def main() -> int:
                         "GitHub Pages allows 1 GB, so split the store before publishing"
                     )
 
-    # Newest source wins: deltas are append-only windows, so ingest them from
-    # newest to oldest and let the master fill the remaining ids. Ingesting the
-    # master first kept a stale copy for matches a delta had republished.
-    if args.deltas_dir and args.deltas_dir.is_dir():
-        for path in sorted(args.deltas_dir.glob("lake_delta_*.tar.gz"), reverse=True):
-            if args.limit and len(written) >= args.limit:
-                break
-            ingest(path)
+    # The published snapshot is already resolved, so there is nothing to
+    # layer over it and no ordering to get wrong.
     ingest(args.master_tar)
 
     for m in matches:

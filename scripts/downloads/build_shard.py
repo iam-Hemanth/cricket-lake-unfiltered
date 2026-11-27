@@ -72,14 +72,6 @@ def _selected_tar_extract(tar_path: Path, wanted: set[str], dest: Path) -> None:
                 out.write(src.read())
 
 
-def _overlay_selected(deltas_dir: Path, wanted: set[str], dest: Path) -> None:
-    for archive in sorted(deltas_dir.glob("lake_delta_*.tar.gz")):
-        try:
-            _selected_tar_extract(archive, wanted, dest)
-        except (tarfile.TarError, OSError):
-            continue
-
-
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as f:
@@ -186,7 +178,6 @@ def main() -> int:
     parser.add_argument("--plan-dir", default="download_plan")
     parser.add_argument("--shard", type=int, required=True)
     parser.add_argument("--master-tar", required=True)
-    parser.add_argument("--deltas-dir", required=True)
     parser.add_argument("--workdir", default="download_work")
     parser.add_argument("--out", default="downloads_out")
     parser.add_argument("--generated-at", default=None)
@@ -210,7 +201,6 @@ def main() -> int:
     if needed:
         print(f"Extracting {len(needed)} match files...")
         _selected_tar_extract(Path(args.master_tar), needed, matches_dir)
-        _overlay_selected(Path(args.deltas_dir), needed, matches_dir)
 
     out = Path(args.out)
     zips_dir = out / "zips"

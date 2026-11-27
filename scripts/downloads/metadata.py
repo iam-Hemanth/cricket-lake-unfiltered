@@ -86,31 +86,6 @@ def parse_iso(value: str | None) -> datetime | None:
         return None
 
 
-def delta_stamp(name: str) -> datetime | None:
-    """Parse both 20261025T20 and 20261026T120000Z-123 names."""
-    match = re.search(r"lake_delta_(\d{8})T(\d{2})(\d{2})?(\d{2})?Z?", name)
-    if not match:
-        return None
-    raw = match.group(1) + match.group(2) + (match.group(3) or "00") + (match.group(4) or "00")
-    try:
-        return datetime.strptime(raw, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
-
-
-def asset_times(path: Path | None) -> dict[str, str]:
-    """Map release asset name -> uploaded timestamp from `gh release view --json assets`."""
-    payload = load_json(path, {}) or {}
-    assets = payload.get("assets", payload if isinstance(payload, list) else [])
-    out: dict[str, str] = {}
-    for asset in assets:
-        name = asset.get("name")
-        stamp = asset.get("updatedAt") or asset.get("createdAt")
-        if name and stamp:
-            out[name] = stamp
-    return out
-
-
 def recovery_time(batches_assets: Path | None, fallback: str) -> str:
     payload = load_json(batches_assets, {}) or {}
     assets = payload.get("assets", payload if isinstance(payload, list) else [])
@@ -320,30 +295,3 @@ def extract_master(master_tar: Path, dest: Path) -> None:
             target = dest / name
             with tf.extractfile(member) as src, open(target, "wb") as out:
                 out.write(src.read())
-
-
-def overlay_deltas(deltas_dir: Path, dest: Path, asset_times_map: dict[str, str]) -> dict[str, str]:
-    """Extract delta members over the master. Returns match_id -> published_at."""
-    dest.mkdir(parents=True, exist_ok=True)
-    published: dict[str, str] = {}
-    archives = sorted(deltas_dir.glob("lake_delta_*.tar.gz"), key=lambda p: (asset_times_map.get(p.name) or "", p.name))
-    for archive in archives:
-        published_at = asset_times_map.get(archive.name)
-        if not published_at:
-            stamp = delta_stamp(archive.name)
-            published_at = stamp.isoformat() if stamp else ""
-        try:
-            with tarfile.open(archive, "r:gz") as tf:
-                for member in tf:
-                    name = Path(member.name).name
-                    if not name.endswith(".json") or not member.isfile():
-                        continue
-                    stem = name[:-5]
-                    if not stem.isdigit():
-                        continue
-                    with tf.extractfile(member) as src, open(dest / name, "wb") as out:
-                        out.write(src.read())
-                    published[stem] = published_at
-        except (tarfile.TarError, OSError):
-            continue
-    return published

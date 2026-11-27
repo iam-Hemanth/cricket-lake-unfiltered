@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Prepare the download catalog: records, slice definitions and 20 shards."""
+"""Prepare the download catalog: records, slice definitions and 20 shards.
+
+The published snapshot is the only input. The previous version extracted the
+master archive and then overlaid the delta archives over it, so a match could
+end up with a different body depending on which archives happened to be
+present. The published snapshot is already the resolved result, and reading
+it alone removes that whole class of ordering problem.
+"""
 from __future__ import annotations
 
 import argparse
@@ -12,12 +19,10 @@ from .metadata import (
     EXPORT_FIELDS,
     CompetitionRegistry,
     TeamRegistry,
-    asset_times,
     enrich,
     extract_master,
     index_rows,
     load_json,
-    overlay_deltas,
     parse_date,
     record_from_match_json,
     recovery_time,
@@ -34,11 +39,11 @@ def _now(value: str | None) -> datetime:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Prepare download records and slice plan")
-    parser.add_argument("--master-tar", required=True)
-    parser.add_argument("--master-index", required=True)
+    parser.add_argument("--master-tar", required=True,
+                        help="The published master archive")
+    parser.add_argument("--master-index", required=True,
+                        help="The published match index")
     parser.add_argument("--master-manifest", default=None)
-    parser.add_argument("--deltas-dir", required=True)
-    parser.add_argument("--delta-assets", default=None)
     parser.add_argument("--batches-assets", default=None)
     parser.add_argument("--recovery-time", default="2026-10-24T20:24:00Z")
     parser.add_argument("--config-dir", default="downloads/config")
@@ -53,12 +58,9 @@ def main() -> int:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Extracting master archive...")
+    print("Extracting the published snapshot...")
     extract_master(Path(args.master_tar), matches_dir)
 
-    times = asset_times(Path(args.delta_assets) if args.delta_assets else None)
-    print("Overlaying delta archives...")
-    delta_published = overlay_deltas(Path(args.deltas_dir), matches_dir, times)
     recovery = recovery_time(Path(args.batches_assets) if args.batches_assets else None, args.recovery_time)
 
     comps = CompetitionRegistry(load_json(Path(args.config_dir) / "competitions.json", []))
@@ -66,7 +68,6 @@ def main() -> int:
     config = load_json(Path(args.config_dir) / "catalog.json")
 
     rows = index_rows(Path(args.master_index))
-    by_id = {str(row["match_id"]): row for row in rows}
 
     records: dict[str, dict] = {}
     for row in rows:
@@ -74,14 +75,15 @@ def main() -> int:
         published = recovery if row.get("schema_version") == "3.3.0" else ""
         records[mid] = enrich(row, comps, teams, published)
 
-    # Delta JSON is the latest version of these matches, whether or not the id
-    # was already in the master index when the index was built.
-    for mid, published_at in delta_published.items():
-        path = matches_dir / f"{mid}.json"
-        if not path.exists():
+    # A match the index does not list but the snapshot holds is read from the
+    # snapshot itself, so the index and the archive cannot disagree about
+    # which matches exist.
+    for path in sorted(matches_dir.glob("*.json")):
+        mid = path.stem
+        if mid in records or not mid.isdigit():
             continue
         row = record_from_match_json(mid, path)
-        records[mid] = enrich(row, comps, teams, published_at)
+        records[mid] = enrich(row, comps, teams, recovery)
 
     ordered = sorted(
         records.values(),
@@ -97,6 +99,7 @@ def main() -> int:
     coverage = manifest.get("coverage") or {}
     warned = coverage.get("warning_matches") or 0
     source_gap = coverage.get("source_gap_matches") or 0
+    scorecard_only = coverage.get("scorecard_only_matches") or 0
     quarantined = coverage.get("quarantined_matches")
     validation_notes = []
     if warned:
@@ -109,6 +112,12 @@ def main() -> int:
             f"{source_gap} published matches are flagged source-gap records "
             "(meta.validation_status = source_gap): source totals and ball-by-ball "
             "differ by a small, disclosed amount."
+        )
+    if scorecard_only:
+        validation_notes.append(
+            f"{scorecard_only} published matches are scorecard-only records "
+            "(meta.validation_status = scorecard_only): ESPN published the scorecard "
+            "but no ball-by-ball commentary for them."
         )
     if quarantined:
         validation_notes.append(f"{quarantined} quarantined matches remain excluded.")
@@ -131,6 +140,7 @@ def main() -> int:
         "excluded_quarantined": quarantined,
         "warning_matches": warned,
         "source_gap_matches": source_gap,
+        "scorecard_only_matches": scorecard_only,
         "slice_count": len(slices),
         "shard_count": len(shards),
         "group_order": GROUP_ORDER,
@@ -139,7 +149,6 @@ def main() -> int:
             *validation_notes,
             "Men-only slices are listed separately; all-match slices include the small women's set.",
             "All-match slices include the small women's set; women's-only slices are withheld for v1 until the T2 backfill is run.",
-            "Added windows cover matches first published by the delta/recovery pipeline; the original 16.4k backfill predates this feed.",
             "Played windows use the first date in meta.dates; multi-day matches are counted from their start date.",
         ],
     }
