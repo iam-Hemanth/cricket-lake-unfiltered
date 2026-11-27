@@ -40,7 +40,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from src import catalog_db, release_store, shard_store  # noqa: E402
 from src.builder import PARSER_VERSION, References, build_match  # noqa: E402
 from src.client import CircuitBreakerTripped, CricinfoClient  # noqa: E402
-from src.commentary import FetchBundleError, fetch_match_bundle  # noqa: E402
+from src.commentary import FetchBundleError, bundle_sha256, fetch_match_bundle  # noqa: E402
 from src.completeness import evaluate_completeness  # noqa: E402
 
 logging.basicConfig(
@@ -343,7 +343,7 @@ def run_commit(args: argparse.Namespace) -> int:
         raw_dir = raw_root / match_id
         if not raw_dir.is_dir():
             continue
-        raw_digest = shard_store.bundle_sha256(raw_dir)
+        raw_digest = bundle_sha256(raw_dir)
         built_path = built_root / f"{match_id}.json"
         if not built_path.exists():
             continue
