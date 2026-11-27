@@ -47,6 +47,7 @@ concurrency:
 env:
   STATE_TAG: lake-state
   DELTA_TAG: data-unfiltered-deltas
+  SCHEDULE_TAG: lake-schedule
   PYTHONUNBUFFERED: '1'
 
 jobs:
@@ -389,9 +390,53 @@ jobs:
           echo "Queued consolidate_full_lake.yml for delta $STAMP"
 
 
+  # ---------------------------------------------------------------- schedule
+  schedule:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scrape upcoming & active series schedules
+        run: |
+          set -euo pipefail
+          python scripts/scrape_schedule.py \
+            --days 60 \
+            --output data/series_schedule.json \
+            --summary data/schedule_summary.json
+
+      - name: Publish schedule asset
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release view "$SCHEDULE_TAG" >/dev/null 2>&1 || \
+            gh release create "$SCHEDULE_TAG" --title "Series schedule feed (6-hourly)" \
+              --notes "Machine-managed series fixtures & live/upcoming schedule feed for CricStats." --latest=false
+          gh release upload "$SCHEDULE_TAG" \
+            data/series_schedule.json data/schedule_summary.json --clobber
+
+      - name: Schedule summary
+        run: |
+          {
+            echo "### Schedule feed"
+            echo '```json'
+            cat data/schedule_summary.json || echo '{}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # ------------------------------------------------------------------ notify
   notify-failure:
-    needs: [discover, extract, publish]
+    needs: [discover, extract, publish, schedule]
     if: failure()
     runs-on: ubuntu-latest
     steps:

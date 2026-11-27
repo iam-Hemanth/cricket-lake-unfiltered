@@ -80,6 +80,13 @@ has its own handoff; do not apply its runbooks, ports or database rules here.
 - `consolidate_full_lake.yml` applies the newest stage index after curated and delta inputs; `prepare.py`, `build_shard.py` and `calendar.py` apply it after their delta overlays so master JSON, slice CSVs and the per-match store agree.
 - The only expected raw gap is the ~440 published matches first extracted by the 6-hourly deltas after 6 Oct 2026; they keep null stage until a metadata refetch or re-extraction. No Cricsheet input is used for stage fields.
 
+## 27 Nov — Series schedule feed
+
+- Added `scripts/scrape_schedule.py` (`lake_schedule_v1`) to scrape rolling 15-day fixture windows (`live-cricket-match-schedule-fixtures`, default 60 days), `live-cricket-match-results`, and active per-series fixture pages (`/series/{slug}-{objectId}/match-schedule-fixtures-and-results`), emitting `series_schedule.json` keyed by `(source_series_id, format_bucket)` with `classification.classify` and `derive_stage`.
+- Kept strictly separate from `extract.py`, `consolidate.py`, and `matches_index.csv` so unplayed/live matches never enter the completed ball-by-ball corpus.
+- `.github/workflows/update_lake.yml` adds a `schedule` job (6-hourly, independent of `has_new`) that uploads `series_schedule.json` and `schedule_summary.json` to release tag `lake-schedule`.
+- Verified with `tests/test_schedule_scraper.py` (226/226 unit tests passing) and a live scrape (`88` series buckets, `1,069` unique matches, `15/15` enriched series).
+
 ## Next steps
 
 1. No repair is pending: every quarantined match was re-fetched today and still
