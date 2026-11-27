@@ -249,6 +249,35 @@ def scrape_live(since: str) -> dict[str, dict]:
     return found
 
 
+def discover_match_ids(since: str | None = None, lookback_days: int = 3,
+                       known_ids: set[str] | None = None) -> list[str]:
+    """The ids of matches that are completed but not yet in the lake.
+
+    This is the function the ingest plan uses. It returns only the ids that
+    are not already known, so the plan does not have to filter them again.
+    """
+    if since:
+        earliest = since
+    else:
+        earliest = (date.today() - timedelta(days=7)).isoformat()
+    earliest = (datetime.strptime(earliest, "%Y-%m-%d").date()
+                - timedelta(days=lookback_days)).isoformat()
+
+    today = date.today()
+    years = list(range(int(earliest[:4]), today.year + 1))
+
+    discovered: dict[str, dict] = {}
+    for year in years:
+        discovered.update(scrape_statsguru(year, earliest))
+    discovered.update(scrape_live(earliest))
+
+    known = known_ids or set()
+    return sorted(
+        (mid for mid in discovered if str(mid) not in known),
+        key=lambda mid: (discovered[mid].get("date", ""), str(mid)),
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Discover new completed matches for the lake")
     ap.add_argument("--since", default=None, help="Earliest match date (YYYY-MM-DD)")
