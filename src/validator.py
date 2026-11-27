@@ -54,15 +54,19 @@ def validate_match_data(match: dict, scorecard_innings: Optional[List[dict]] = N
         errors.append(f"Incomplete innings: candidate {len(innings)} != source {len(scorecard_innings)}")
     for index, inn in enumerate(innings):
         source = scorecard_innings[index] if scorecard_innings is not None and index < len(scorecard_innings) else None
+        scorecard_only_super_over = bool(inn.get("super_over")) and not [
+            d for ov in inn.get("overs") or [] for d in ov.get("deliveries") or []
+        ]
         if match['meta']['schema_version']=='3.3.0' and source is not None:
             if inn['source_scorecard']!=source_facts.scorecard_snapshot(source):
                 errors.append('Stored scorecard snapshot conflicts with supplied source')
-            actual=sum(d['is_legal'] for ov in inn['overs'] for d in ov['deliveries'])
-            runs=sum(d['runs']['total'] for ov in inn['overs'] for d in ov['deliveries'])+inn['innings_penalty_runs']
-            if source.get('balls') is not None and actual!=source['balls']:
-                errors.append('Supplied source exact legal-ball total mismatch')
-            if source.get('runs') is not None and runs!=source['runs']:
-                errors.append('Supplied source exact runs mismatch')
+            if not scorecard_only_super_over:
+                actual=sum(d['is_legal'] for ov in inn['overs'] for d in ov['deliveries'])
+                runs=sum(d['runs']['total'] for ov in inn['overs'] for d in ov['deliveries'])+inn['innings_penalty_runs']
+                if source.get('balls') is not None and actual!=source['balls']:
+                    errors.append('Supplied source exact legal-ball total mismatch')
+                if source.get('runs') is not None and runs!=source['runs']:
+                    errors.append('Supplied source exact runs mismatch')
         _, innings_errors = validate_innings(inn, source, is_last_innings=index == len(innings)-1,
                                              balls_per_over=match["meta"]["balls_per_over"])
         errors.extend(innings_errors)
@@ -75,8 +79,27 @@ def validate_match_data(match: dict, scorecard_innings: Optional[List[dict]] = N
         for inn in innings:
             deliveries=[d for ov in inn['overs'] for d in ov['deliveries']]
             snap=inn['source_scorecard']
+            scorecard_only_super_over = bool(inn.get('super_over')) and not deliveries
             _,source_errors=validate_innings(inn,snap,balls_per_over=match['meta']['balls_per_over'])
             errors.extend(source_errors)
+            if scorecard_only_super_over:
+                # Scorecard-only decider innings have no ball-by-ball coverage.
+                if inn.get('include_in_standard_stats') is not False:
+                    errors.append('Scorecard-only Super Over must be excluded from standard stats')
+                for key in ('runs','wickets','balls','wides','noballs','byes','legbyes','penalties'):
+                    value=snap.get(key)
+                    if value is not None and (type(value) is not int or value<0):
+                        errors.append(f'Invalid scorecard-only source quantity: {key}')
+                penalty=inn.get('innings_penalty_runs')
+                if type(penalty) is not int or penalty<0:
+                    errors.append('Invalid scorecard-only innings penalty')
+                if inn.get('penalty_adjustment_status') not in ('not_reported','none','source_backed'):
+                    errors.append('Invalid scorecard-only penalty status')
+                if inn['source_legal_balls']!=snap['balls']:
+                    errors.append('Source scorecard legal-ball coverage mismatch')
+                if inn.get('legal_balls',0)!=0 or inn.get('delivered_balls',0)!=0:
+                    errors.append('Scorecard-only Super Over carries a delivery clock')
+                continue
             legal=sum(d['is_legal'] for d in deliveries)
             if inn['source_legal_balls']!=snap['balls'] or (snap['balls'] is not None and legal!=snap['balls']):
                 errors.append('Source scorecard legal-ball coverage mismatch')
@@ -126,6 +149,8 @@ def validate_innings(
     errors = []
     overs = inn.get("overs") or []
     if not overs:
+        if inn.get("super_over") is True:
+            return True, []
         if sc_inn and ((sc_inn.get("runs") or 0) > 0 or (sc_inn.get("wickets") or 0) > 0):
             return False, ["Incomplete deliveries for a nonzero scorecard innings"]
         return True, []
@@ -412,7 +437,7 @@ def validate_hundred_contract(match: dict) -> List[str]:
             legal=after
         if inn['legal_balls']!=legal or inn['delivered_balls']!=len(balls):
             errors.append('Hundred innings clock totals mismatch')
-        if inn['source_legal_balls'] is not None and legal!=inn['source_legal_balls']:
+        if not (special and not balls) and inn['source_legal_balls'] is not None and legal!=inn['source_legal_balls']:
             errors.append('Hundred stored scorecard legal-ball total mismatch')
         counter_coverage={
             'delivery_sequence':sum(d['source_delivery_sequence'] is not None for d in balls),

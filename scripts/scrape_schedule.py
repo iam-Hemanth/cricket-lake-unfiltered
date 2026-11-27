@@ -25,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src import classification  # noqa: E402
+from src import classification, hundred  # noqa: E402
 from src.stage import derive_series_id, derive_stage  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -144,16 +144,47 @@ def normalize_schedule_match(raw: dict, fallback_series: dict | None = None) -> 
     state = (_clean_text(raw.get("state")) or "").upper() or "PRE"
     stage = (_clean_text(raw.get("stage")) or "").upper() or "SCHEDULED"
 
+    status_text = _clean_text(raw.get("statusText"))
     winner_team = None
+    tiebreaker_team = None
     winner_team_id = _as_int(raw.get("winnerTeamId"))
-    if winner_team_id is not None:
+    tiebreaker_team_id = _as_int(raw.get("tiebreakerTeamId"))
+    if winner_team_id is not None or tiebreaker_team_id is not None:
         for entry in raw.get("teams") or []:
             if not isinstance(entry, dict):
                 continue
             team_obj = entry.get("team")
-            if isinstance(team_obj, dict) and _as_int(team_obj.get("id")) == winner_team_id:
-                winner_team = _clean_text(team_obj.get("name")) or _clean_text(team_obj.get("longName"))
-                break
+            if not isinstance(team_obj, dict):
+                continue
+            team_id = _as_int(team_obj.get("id"))
+            name = _clean_text(team_obj.get("name")) or _clean_text(team_obj.get("longName"))
+            if team_id == winner_team_id:
+                winner_team = name
+            if team_id == tiebreaker_team_id:
+                tiebreaker_team = name
+    # A decided tie carries no winnerTeamId; the tiebreaker is the deciding
+    # team, and the series card credits it exactly as the served DB does.
+    if winner_team is None:
+        winner_team = tiebreaker_team
+
+    decider_method = None
+    if tiebreaker_team is not None:
+        lang_key = str(
+            ((raw.get("statusData") or {}).get("statusTextLangKey")) or ""
+        ).lower()
+        lowered = (status_text or "").lower()
+        if lang_key == "match_status_text_tied_tiebreaker_on_second_super_over" or "2nd super over" in lowered:
+            decider_method = "second_super_over"
+        elif lang_key == "match_status_text_tied_tiebreaker_on_boundary_count" or "boundary count" in lowered:
+            decider_method = "boundary_count"
+        elif lang_key == "match_status_text_tied_tiebreaker_won" or "one-over eliminator" in lowered:
+            decider_method = "one_over_eliminator"
+        elif hundred.is_hundred(raw.get("format"), (series or {}).get("name")):
+            decider_method = "super_five"
+        elif raw.get("isSuperOver"):
+            decider_method = "super_over"
+        else:
+            decider_method = "bowl_out"
 
     return {
         "match_id": str(mid),
@@ -164,8 +195,10 @@ def normalize_schedule_match(raw: dict, fallback_series: dict | None = None) -> 
         "end_date": end_date,
         "state": state,
         "stage": stage,
-        "status_text": _clean_text(raw.get("statusText")),
+        "status_text": status_text,
         "winner_team": winner_team,
+        "tiebreaker_team": tiebreaker_team,
+        "decider_method": decider_method,
         "teams": teams,
         "venue": venue,
         "format": class_meta["format"],

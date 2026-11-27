@@ -190,7 +190,7 @@ def main():
 
             # 2. Fetch innings commentary
             innings_list = content.get("innings") or []
-            commentary_chunks_by_inn: Dict[int, List[dict]] = {}
+            commentary_chunks_by_inn: Dict[Any, List[dict]] = {}
             inn_fetch_failed = False
 
             for inn_idx, inn in enumerate(innings_list, 1):
@@ -214,6 +214,34 @@ def main():
             if inn_fetch_failed:
                 continue
 
+            # 2b. Probe Super Over commentary in fail-soft mode. ESPN serves no
+            # deliveries for these innings, so an error or an empty list leaves
+            # the scorecard-only line in place and never fails the match. Keys
+            # are separate from the 1-based regulation index.
+            super_inns = content.get("superOverInnings") or []
+            for so_idx, so_inn in enumerate(super_inns):
+                so_num = so_inn.get("inningNumber")
+                if type(so_num) is not int or so_num < 1:
+                    so_num = len(innings_list) + so_idx + 1
+                try:
+                    chunks, c_err = fetch_innings_commentary(
+                        client=client,
+                        series_id=series_id,
+                        match_id=mid,
+                        inn_num=so_num,
+                        raw_dir=raw_dir,
+                        delay_sec=args.delay
+                    )
+                except Exception as exc:  # fail-soft: scorecard-only is valid
+                    chunks, c_err = [], str(exc)
+                if c_err:
+                    logger.warning(
+                        f"Super Over commentary probe failed for match {mid} inn {so_num}: {c_err}"
+                        " (continuing with scorecard-only totals)"
+                    )
+                    chunks = []
+                commentary_chunks_by_inn[("super", so_idx)] = chunks
+
             # 3. Construct Match v3.0
             try:
                 match_v3, const_err = construct_match_v3(
@@ -235,7 +263,9 @@ def main():
                 continue
 
             # 4. Shared schema, identity, classification and score coverage gate
-            sc_inns = details.get('content', {}).get('innings') or []
+            sc_inns = (details.get('content', {}).get('innings') or []) + (
+                details.get('content', {}).get('superOverInnings') or []
+            )
             validation_errors = validate_match_data(match_v3,sc_inns)
 
             if validation_errors:

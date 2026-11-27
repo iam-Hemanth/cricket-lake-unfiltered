@@ -20,10 +20,29 @@ def _event_sources(details, commentary):
     for index, event in enumerate((details.get("content") or {}).get("participationEvents") or []):
         yield event, None, f"/content/participationEvents/{index}"
     for inn, balls in commentary.items():
+        label = _commentary_label(inn)
         for index, ball in enumerate(balls):
             for event_index, event in enumerate(ball.get("events") or []):
                 if isinstance(event, dict):
-                    yield event, ball, f"/commentary/{inn}/{index}/events/{event_index}"
+                    yield event, ball, f"/commentary/{label}/{index}/events/{event_index}"
+
+
+def _commentary_label(innings_key):
+    if isinstance(innings_key, tuple):
+        return ":".join(str(part) for part in innings_key)
+    return str(innings_key)
+
+
+def _innings_player_sources(innings, prefix):
+    for inn_index, inn in enumerate(innings or []):
+        for collection, role in (("inningBatsmen", "listed"), ("inningDidNotBats", "listed"), ("inningBowlers", "bowler")):
+            team_id = _id((inn.get("team") or {}).get("id")) if collection != "inningBowlers" else None
+            for index, entry in enumerate(inn.get(collection) or []):
+                ref = f"{prefix}/{inn_index}/{collection}/{index}"
+                yield entry.get("player") or {}, team_id, role, ref + "/player"
+                for f_index, fielder in enumerate(entry.get("dismissalFielders") or []):
+                    if isinstance(fielder, dict):
+                        yield fielder.get("player") or {}, None, "fielder", ref + f"/dismissalFielders/{f_index}/player"
 
 
 def _player_sources(details, commentary):
@@ -32,21 +51,17 @@ def _player_sources(details, commentary):
         team_id = _id((group.get("team") or {}).get("id"))
         for index, entry in enumerate(group.get("players") or []):
             yield entry.get("player") or {}, team_id, "listed", f"/content/matchPlayers/teamPlayers/{group_index}/players/{index}/player"
-    for inn_index, inn in enumerate(content.get("innings") or []):
-        for collection, role in (("inningBatsmen", "listed"), ("inningDidNotBats", "listed"), ("inningBowlers", "bowler")):
-            team_id = _id((inn.get("team") or {}).get("id")) if collection != "inningBowlers" else None
-            for index, entry in enumerate(inn.get(collection) or []):
-                ref = f"/content/innings/{inn_index}/{collection}/{index}"
-                yield entry.get("player") or {}, team_id, role, ref + "/player"
-                for f_index, fielder in enumerate(entry.get("dismissalFielders") or []):
-                    if isinstance(fielder, dict):
-                        yield fielder.get("player") or {}, None, "fielder", ref + f"/dismissalFielders/{f_index}/player"
+    # Regulation and Super Over scorecard lines are separate JSON arrays; each
+    # keeps its own source-reference prefix so every listed actor is registered.
+    yield from _innings_player_sources(content.get("innings"), "/content/innings")
+    yield from _innings_player_sources(content.get("superOverInnings"), "/content/superOverInnings")
     for inn, balls in commentary.items():
+        label = _commentary_label(inn)
         for index, ball in enumerate(balls):
             over = ball.get("over") or {}
             for collection, role in (("overEndBatsmen", "listed"), ("overEndBowlers", "bowler")):
                 for p_index, entry in enumerate(over.get(collection) or []):
-                    yield entry.get("player") or {}, None, role, f"/commentary/{inn}/{index}/over/{collection}/{p_index}/player"
+                    yield entry.get("player") or {}, None, role, f"/commentary/{label}/{index}/over/{collection}/{p_index}/player"
     for event, ball, ref in _event_sources(details, commentary):
         for key in ("incomingPlayer", "outgoingPlayer", "replacingPlayer", "player", "batsman", "bowler", "fielder"):
             value = event.get(key)

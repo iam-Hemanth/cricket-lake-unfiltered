@@ -52,6 +52,10 @@ ISO_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 
 # Statsguru lists live multi-day matches alongside completed ones; such rows
 # have no result text yet. Only schedule matches that actually finished.
+# "Without a ball bowled" rows are skipped here because Statsguru gives them no
+# result cell. The live feed (scrape_live) still admits 0-innings no-results:
+# ESPN records them as completed cards with playing_xi and no innings, and the
+# constructor stores them as metadata_without_recorded_innings.
 RESULT_MARKERS = (
     "won by", "drawn", "tied", "no result", "abandoned", "cancelled",
     "awarded", "forfeit", "forfait", "walkover",
@@ -197,7 +201,12 @@ def scrape_statsguru(year: int, since: str) -> dict[str, dict]:
 
 
 def scrape_live(since: str) -> dict[str, dict]:
-    """Newest fixtures; also fills in the series name the stats page omits."""
+    """Newest fixtures; also fills in the series name the stats page omits.
+
+    A decided tie carries no ``winnerTeamId``; ``tiebreakerTeamId`` and the
+    match-level ``isSuperOver`` flag are captured so the schedule feed and the
+    extracted record agree.
+    """
     found: dict[str, dict] = {}
     try:
         r = requests.get(LIVE_RESULTS, impersonate="chrome124", timeout=30)
@@ -230,6 +239,8 @@ def scrape_live(since: str) -> dict[str, dict]:
                 "winner": None,
                 "result": status,
                 "competition": series,
+                "tiebreaker_team_id": match.get("tiebreakerTeamId"),
+                "is_super_over": bool(match.get("isSuperOver")),
             })
             if series:
                 entry["competition"] = series

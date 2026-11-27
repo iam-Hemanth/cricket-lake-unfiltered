@@ -70,10 +70,83 @@ def normalize_delivery_runs(ball: dict, match_meta: dict) -> Tuple[dict, dict, O
     extras = {name: value for name, value in extras.items() if value}
     return {"batter": batter, "extras": sum(extras.values()), "total": total}, extras, note
 
+
+def _optional_count(value):
+    return value if type(value) is int and value >= 0 else None
+
+
+def _optional_number(value):
+    return float(value) if type(value) in (int, float) else None
+
+
+def _optional_text(value):
+    return value if type(value) is str and value else None
+
+
+def _scorecard_player_id(source_player, id_map, players):
+    """Resolve a scorecard-only actor to a registered participant, or None."""
+    player = source_player if isinstance(source_player, dict) else {}
+    internal = _id(player.get("id"))
+    pid = id_map.get(internal) if internal is not None else None
+    if pid is None:
+        public = _id(player.get("objectId"))
+        candidate = f"espn_{public}" if public is not None else None
+        if candidate in players:
+            pid = candidate
+    return pid if pid in players else None
+
+
+def scorecard_only_details(inn, id_map, players):
+    """Per-actor scorecard lines for a Super Over ESPN serves without deliveries."""
+    batters = []
+    for entry in inn.get("inningBatsmen") or []:
+        player = entry.get("player") or {}
+        dismissal = entry.get("dismissalText")
+        if isinstance(dismissal, dict):
+            dismissal = dismissal.get("short")
+        batters.append({
+            "player_id": _scorecard_player_id(player, id_map, players),
+            "name": _optional_text(player.get("name")),
+            "runs": _optional_count(entry.get("runs")),
+            "balls": _optional_count(entry.get("balls")),
+            "fours": _optional_count(entry.get("fours")),
+            "sixes": _optional_count(entry.get("sixes")),
+            "strike_rate": _optional_number(entry.get("strikerate")),
+            "is_out": entry.get("isOut") if type(entry.get("isOut")) is bool else None,
+            "dismissal_text": _optional_text(dismissal),
+        })
+    bowlers = []
+    for entry in inn.get("inningBowlers") or []:
+        player = entry.get("player") or {}
+        bowlers.append({
+            "player_id": _scorecard_player_id(player, id_map, players),
+            "name": _optional_text(player.get("name")),
+            "overs": _optional_number(entry.get("overs")),
+            "balls": _optional_count(entry.get("balls")),
+            "maidens": _optional_count(entry.get("maidens")),
+            "runs_conceded": _optional_count(entry.get("conceded")),
+            "wickets": _optional_count(entry.get("wickets")),
+            "economy": _optional_number(entry.get("economy")),
+            "wides": _optional_count(entry.get("wides")),
+            "noballs": _optional_count(entry.get("noballs")),
+        })
+    fow = []
+    for entry in inn.get("inningFallOfWickets") or []:
+        player = entry.get("dismissalBatsman") or {}
+        fow.append({
+            "wicket_number": _optional_count(entry.get("fowWicketNum")),
+            "runs": _optional_count(entry.get("fowRuns")),
+            "overs": _optional_number(entry.get("fowOvers")),
+            "batter_id": _scorecard_player_id(player, id_map, players),
+            "batter_name": _optional_text(player.get("name")),
+        })
+    return {"batters": batters, "bowlers": bowlers, "fow": fow}
+
+
 def construct_match_v3(
     mid: str,
     raw_details: dict,
-    commentary_chunks_by_inn: Dict[int, List[dict]],
+    commentary_chunks_by_inn: Dict[object, List[dict]],
     player_profiles: dict,
     people_registry: dict,
     venue_map: dict
@@ -131,17 +204,57 @@ def construct_match_v3(
     playing_xi, playing_xi_status = confirmed_lineups(raw_details, players, participation_events)
     missing_non_striker_deliveries = 0
 
+    # Number every scorecard innings once. Super Over innings get their own
+    # numbers (source inningNumber when it is beyond regulation, else a
+    # monotonic slot after max(3, last regulation innings + 1)).
+    regular_innings = content.get("innings") or []
+    super_over_innings = content.get("superOverInnings") or []
+    max_reg_num = 0
+    for idx, inn in enumerate(regular_innings):
+        if inn.get("isSuperOver"):
+            continue
+        number = inn.get("inningNumber")
+        if type(number) is not int or number < 1:
+            number = idx + 1
+        max_reg_num = max(max_reg_num, number)
+    next_super_num = max(3, max_reg_num + 1)
+
+    numbered_innings = []
+    for idx, inn in enumerate(regular_innings):
+        is_so = bool(inn.get("isSuperOver"))
+        number = inn.get("inningNumber")
+        if is_so:
+            if type(number) is not int or number < next_super_num:
+                number = next_super_num
+            next_super_num = number + 1
+        elif type(number) is not int or number < 1:
+            number = idx + 1
+        numbered_innings.append({"source": inn, "index": idx, "super_listing": False,
+                                 "number": number, "is_super_over": is_so,
+                                 "commentary_key": idx + 1,
+                                 "path": f"/content/innings/{idx}"})
+    for idx, inn in enumerate(super_over_innings):
+        number = inn.get("inningNumber")
+        if type(number) is not int or number < next_super_num:
+            number = next_super_num
+        next_super_num = number + 1
+        numbered_innings.append({"source": inn, "index": idx, "super_listing": True,
+                                 "number": number, "is_super_over": True,
+                                 "commentary_key": ("super", idx),
+                                 "path": f"/content/superOverInnings/{idx}"})
+
     # Dismissal fielders map
     dismissal_fielders_map = {}
     retirement_kinds = {}
     retirement_refs = {}
-    for inn_idx, inn in enumerate(content.get("innings") or []):
-        inn_num = inn.get("inningNumber") or (inn_idx + 1)
+    for item in numbered_innings:
+        inn = item["source"]
+        inn_num = item["number"]
         for batter_index,b in enumerate(inn.get("inningBatsmen") or []):
             b_id = _id((b.get("player") or {}).get("id"))
             if source_facts.dismissal_text(b)=='retired not out':
                 retirement_kinds[(inn_num,b_id)]='retired not out'
-                retirement_refs[(inn_num,b_id)]=f'/content/innings/{inn_idx}/inningBatsmen/{batter_index}/dismissalText'
+                retirement_refs[(inn_num,b_id)]=f'{item["path"]}/inningBatsmen/{batter_index}/dismissalText'
             fielders = []
             if b.get("dismissalFielders"):
                 for f in (b.get("dismissalFielders") or []):
@@ -174,22 +287,17 @@ def construct_match_v3(
     total_tracked_balls = 0
     normalization_notes = []
 
-    super_over_counter = 3
-
-    for inn_idx, inn in enumerate(content.get("innings") or []):
-        is_so = bool(inn.get("isSuperOver"))
+    for item in numbered_innings:
+        inn = item["source"]
+        inn_num = item["number"]
+        is_so = item["is_super_over"]
         if is_hundred and inn.get("ballsPerOver") not in (None, 5):
             return None, f"Match {mid}: conflicting innings ballsPerOver"
-        if is_so and db_fmt_bucket in ("T20", "T20I", "IPL", "ODI"):
-            inn_num = super_over_counter
-            super_over_counter += 1
-        else:
-            inn_num = inn.get("inningNumber") or (inn_idx + 1)
 
         batting_team = (inn.get("team") or {}).get("name")
         bowling_team = teams[1] if (len(teams) > 1 and batting_team == teams[0]) else (teams[0] if teams else None)
 
-        raw_balls = commentary_chunks_by_inn.get(inn_idx + 1) or []
+        raw_balls = commentary_chunks_by_inn.get(item["commentary_key"]) or []
         # Deduplicate balls by id if present, preserving first occurrence
         seen_ball_ids = set()
         deduped_balls = []
@@ -319,7 +427,7 @@ def construct_match_v3(
                             return None, f"Match {mid}: unresolved dismissal actor {out_int_id}"
                         out_name = out_info.get("name") or b_info.get("name")
 
-                        fielders = dismissal_fielders_map.get((inn_idx + 1, out_int_id), [])
+                        fielders = dismissal_fielders_map.get((inn_num, out_int_id), [])
 
                         if kind == "caught" and fielders:
                             if fielders[0].get("player_id") == bw_pid:
@@ -405,7 +513,22 @@ def construct_match_v3(
 
         all_deliveries=[d for ov in enriched_overs for d in ov['deliveries']]
         source_snapshot=source_facts.scorecard_snapshot(inn)
-        source_penalty=source_facts.innings_penalty(all_deliveries,source_snapshot)
+        scorecard_only = is_so and not raw_balls
+        if scorecard_only:
+            # ESPN publishes the Super Over as scorecard lines only. The
+            # declared penalty is source-backed without ball coverage.
+            declared_penalty = inn.get("penalties")
+            penalty_runs = int(declared_penalty or 0)
+            penalty_facts = {
+                "innings_penalty_runs": penalty_runs,
+                "penalty_adjustment_status": (
+                    "source_backed" if penalty_runs > 0
+                    else "none" if declared_penalty is not None
+                    else "not_reported"
+                ),
+            }
+        else:
+            penalty_facts = source_facts.innings_penalty(all_deliveries,source_snapshot)
         enriched_innings.append({
             "innings_number": inn_num,
             "batting_team": batting_team,
@@ -415,13 +538,17 @@ def construct_match_v3(
             "follow_on": bool(inn.get("isFollowOn")),
             "super_over": is_so,
             "overs": enriched_overs,
+            "innings_kind": ("super_five" if (is_hundred and is_so)
+                             else "super_over" if is_so else "main"),
+            "include_in_standard_stats": (not is_so),
             'source_scorecard':source_snapshot,'source_legal_balls':inn.get('balls'),
-            'penalty_adjustment_source':f'/content/innings/{inn_idx}/penalties',
-            **source_penalty,
+            'penalty_adjustment_source':f'{item["path"]}/penalties',
+            **penalty_facts,
             **(dict(hundred_innings, legal_balls=legal_balls, delivered_balls=delivery_sequence,
                     source_counter_coverage={
                         "delivery_sequence":sum(type(b.get("ballsUnique")) is int for b in raw_balls),
-                        "legal_position":sum(type(b.get("ballsActual")) is int for b in raw_balls)}) if is_hundred else {})
+                        "legal_position":sum(type(b.get("ballsActual")) is int for b in raw_balls)}) if is_hundred else {}),
+            **({"scorecard_only_details": scorecard_only_details(inn, id_map, players)} if scorecard_only else {})
         })
 
     # Toss & Outcome
@@ -432,7 +559,12 @@ def construct_match_v3(
 
     winner_team_id = match_info.get("winnerTeamId")
     winner_name = team_name_by_id.get(winner_team_id)
+    tiebreaker_team_id = match_info.get("tiebreakerTeamId")
+    tiebreaker_name = team_name_by_id.get(tiebreaker_team_id)
     status_text = match_info.get("statusText") or ""
+    status_lang_key = str(
+        ((match_info.get("statusData") or {}).get("statusTextLangKey")) or ""
+    ).lower()
 
     win_by_runs = None
     win_by_wkts = None
@@ -440,6 +572,7 @@ def construct_match_v3(
     result = None
     eliminator = None
     method = None
+    decider_method = None
 
     if "dls" in status_text.lower() or "d/l" in status_text.lower():
         method = "DLS"
@@ -456,8 +589,23 @@ def construct_match_v3(
 
     if "tied" in status_text.lower():
         result = "tie"
-        if winner_name:
-            eliminator = winner_name
+        eliminator = tiebreaker_name or winner_name
+        # Decided ties keep outcome.winner null; the deciding team lives in
+        # outcome.eliminator and the method in outcome.decider_method.
+        winner_name = None
+        lowered = status_text.lower()
+        if status_lang_key == "match_status_text_tied_tiebreaker_on_second_super_over" or "2nd super over" in lowered:
+            decider_method = "second_super_over"
+        elif status_lang_key == "match_status_text_tied_tiebreaker_on_boundary_count" or "boundary count" in lowered:
+            decider_method = "boundary_count"
+        elif status_lang_key == "match_status_text_tied_tiebreaker_won" or "one-over eliminator" in lowered:
+            decider_method = "one_over_eliminator"
+        elif is_hundred and eliminator:
+            decider_method = "super_five"
+        elif status_lang_key == "match_status_text_tied_tiebreaker_on_super_over" or (eliminator and match_info.get("isSuperOver")):
+            decider_method = "super_over"
+        elif eliminator and not match_info.get("isSuperOver") and "one-over eliminator" not in lowered:
+            decider_method = "bowl_out"
     elif "no result" in status_text.lower() or "abandoned" in status_text.lower():
         result = "no result"
         winner_name = None
@@ -508,6 +656,8 @@ def construct_match_v3(
             "identity_issues": identity_issues,
             "playing_xi_status": playing_xi_status,
             "missing_non_striker_deliveries": missing_non_striker_deliveries,
+            "is_super_over": bool(match_info.get("isSuperOver")),
+            "status_text": status_text or None,
             **hundred_meta,
             **class_meta
         },
@@ -518,7 +668,8 @@ def construct_match_v3(
             "win_by_innings": win_by_innings,
             "result": result,
             "eliminator": eliminator,
-            "method": method
+            "method": method,
+            "decider_method": decider_method
         },
         "toss": {
             "winner": toss_winner_name,

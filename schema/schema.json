@@ -261,6 +261,18 @@
           "type": "integer",
           "minimum": 0
         },
+        "is_super_over": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "status_text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "playing_format": {
           "enum": [
             "multi_day",
@@ -452,6 +464,12 @@
           ]
         },
         "method": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "decider_method": {
           "type": [
             "string",
             "null"
@@ -814,11 +832,197 @@
           "innings_kind": {
             "enum": [
               "main",
+              "super_over",
               "super_five"
             ]
           },
           "include_in_standard_stats": {
             "type": "boolean"
+          },
+          "scorecard_only_details": {
+            "type": "object",
+            "properties": {
+              "batters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "player_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "runs": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "balls": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "fours": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "sixes": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "strike_rate": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "is_out": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "dismissal_text": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              },
+              "bowlers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "player_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "overs": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "balls": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "maidens": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "runs_conceded": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "wickets": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "economy": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "wides": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "noballs": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    }
+                  }
+                }
+              },
+              "fow": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "wicket_number": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 1
+                    },
+                    "runs": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "overs": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "batter_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "batter_name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "allocated_legal_balls": {
             "type": [
