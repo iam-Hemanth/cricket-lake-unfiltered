@@ -46,19 +46,18 @@ def _read(path: Path) -> str:
 def _push_branches(text: str) -> list[str]:
     """The branch names a workflow's push trigger names.
 
-    The check reads the parsed workflow when PyYAML is available, because a
-    regular expression over YAML is a poor way to find a trigger. PyYAML
-    reads ``on:`` as the boolean ``True``, which is why the key is looked up
-    both ways.
+    The check reads the parsed workflow, because a regular expression over
+    YAML is a poor way to find a trigger. PyYAML reads ``on:`` as the
+    boolean ``True``, which is why the key is looked up both ways.
     """
     try:
         import yaml
     except ImportError:
-        return []
-    try:
-        document = yaml.safe_load(text)
-    except Exception:
-        return []
+        raise AssertionError(
+            "PyYAML is not installed, so the workflow triggers cannot be "
+            "checked. Install it: pip install -r requirements.txt"
+        )
+    document = yaml.safe_load(text)
     if not isinstance(document, dict):
         return []
     triggers = document.get("on", document.get(True))
