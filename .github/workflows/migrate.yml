@@ -1,0 +1,182 @@
+name: Migrate
+
+# The one-time migration from the old lake to the catalog.
+#
+# This workflow is temporary. It seeds the raw layer, rebuilds every match
+# through the shared builder, and writes the catalog. It never fetches from
+# ESPN: it reads the raw batches the lake has already collected.
+#
+# The work is split one worker per raw batch asset, which is the shape the
+# matrix can run in parallel. The merge step is the single writer, so the
+# catalog is never written by two jobs at once.
+
+on:
+  workflow_dispatch:
+    inputs:
+      worker_asset:
+        description: "The raw batch asset to process (blank to run the merge)"
+        required: false
+        type: string
+      source_release:
+        description: "The release the raw batches live in"
+        required: false
+        type: string
+        default: data-unfiltered-batches
+      source_repo:
+        description: "The repository the raw batches live in"
+        required: false
+        type: string
+        default: iam-Hemanth/cricket-lake-unfiltered
+      merge:
+        description: "Write the shards and the catalog"
+        required: false
+        type: boolean
+      verify:
+        description: "Compare the result against the published master"
+        required: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: migrate
+  cancel-in-progress: false
+
+jobs:
+  list:
+    name: List the raw batches
+    runs-on: ubuntu-latest
+    outputs:
+      assets: ${{ steps.list.outputs.assets }}
+      count: ${{ steps.list.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: List the raw batch assets
+        id: list
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/migrate_to_catalog.py --list-assets > assets_raw.txt
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          text = open("assets_raw.txt").read()
+          assets = json.loads(text[text.rindex("\n[") + 1:])
+          names = [a["asset"] for a in assets]
+          print(f"count={len(names)}")
+          print(f"assets={json.dumps(names)}")
+          PY
+
+  worker:
+    name: Migrate ${{ matrix.asset }}
+    needs: list
+    if: ${{ inputs.worker_asset == '' && !inputs.merge && !inputs.verify }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        asset: ${{ fromJSON(needs.list.outputs.assets) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Rebuild the batch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSET: ${{ matrix.asset }}
+        run: |
+          python scripts/migrate_to_catalog.py --worker \
+            --batch "$ASSET" \
+            --source-release "${{ inputs.source_release }}" \
+            --source-repo "${{ inputs.source_repo }}" \
+            --workdir migrate_work
+      - name: Upload the staged raw payloads and built matches
+        uses: actions/upload-artifact@v4
+        with:
+          name: migrate-${{ matrix.asset }}
+          path: |
+            migrate_work/stage/raw/
+            migrate_work/stage/built/
+            migrate_work/stage/worker_summaries/
+          retention-days: 7
+
+  merge:
+    name: Merge
+    needs: [list, worker]
+    if: ${{ inputs.merge || (inputs.worker_asset == '' && !inputs.verify) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Download the staged output
+        uses: actions/download-artifact@v4
+        with:
+          path: migrate_work/stage
+          merge-multiple: true
+      - name: Write the shards and the catalog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/migrate_to_catalog.py --merge --workdir migrate_work
+      - name: Upload the raw shards
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for asset in migrate_work/archives/raw_shard_*.tar.gz; do
+            [ -e "$asset" ] || continue
+            gh release upload lake-raw "$(basename "$asset")" \
+              --repo ${{ github.repository }} --clobber
+          done
+      - name: Upload the built shards
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for asset in migrate_work/archives/built_shard_*.tar.gz; do
+            [ -e "$asset" ] || continue
+            gh release upload lake-built "$(basename "$asset")" \
+              --repo ${{ github.repository }} --clobber
+          done
+      - name: Upload the catalog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload lake-catalog migrate_work/lake_catalog.sqlite.gz \
+            --repo ${{ github.repository }} --clobber
+
+  verify:
+    name: Verify
+    needs: [list, worker]
+    if: ${{ inputs.verify }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Download the staged output
+        uses: actions/download-artifact@v4
+        with:
+          path: migrate_work/stage
+          merge-multiple: true
+      - name: Compare against the published master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/migrate_to_catalog.py --merge --workdir migrate_work
+          python scripts/migrate_to_catalog.py --verify --workdir migrate_work \
+            | tee verify_summary.json
