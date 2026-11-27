@@ -193,6 +193,18 @@ def run_worker(args: argparse.Namespace) -> int:
             failed += 1
             results.append({"match_id": match_id, "status": "failed", "error": result.error})
             continue
+
+        # The raw payload is staged as well as the built match: the raw layer
+        # is the evidence the whole architecture rests on, so it has to survive
+        # the migration rather than be fetched again later.
+        staged_raw = raw_out / match_id
+        staged_raw.mkdir(parents=True, exist_ok=True)
+        for file_path in sorted(match_dir.glob("*.json.gz")):
+            shutil.copy2(file_path, staged_raw / file_path.name)
+        meta_path = match_dir / "meta.json"
+        if meta_path.exists():
+            shutil.copy2(meta_path, staged_raw / "meta.json")
+
         (built_out / f"{match_id}.json").write_text(
             json.dumps(result.match, indent=2, ensure_ascii=False), encoding="utf-8"
         )

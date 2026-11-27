@@ -578,7 +578,7 @@ class MatchAssessment:
     @property
     def is_publishable(self) -> bool:
         """Whether the tier is admitted to the published lake."""
-        return self.tier in ("clean", "warning", "source_gap")
+        return self.tier in ("clean", "warning", "source_gap", "scorecard_only")
 
     def to_dict(self) -> dict:
         payload = {"tier": self.tier, "errors": self.errors, "warnings": self.warnings}
@@ -763,6 +763,33 @@ def source_gap_detail(match: dict, errors: List[str]) -> Optional[dict]:
     }
 
 
+def _scorecard_only_match(match: dict) -> bool:
+    """Whether the match is a scorecard-only record.
+
+    Some ESPN matches carry a scorecard but no commentary, so there is no
+    ball-by-ball record to build from. The record is not corrupt: it holds
+    the scorecard and nothing else. Such a match is admitted with its
+    coverage gap disclosed, because rejecting it would drop a match ESPN
+    really did publish.
+
+    The scorecard may score runs. What makes the record scorecard-only is
+    that *no* innings has a single delivery: the ball-by-ball record is
+    absent altogether, not partial.
+    """
+    innings = match.get("innings") or []
+    if not innings:
+        return False
+    for inn in innings:
+        deliveries = [
+            d for ov in inn.get("overs") or [] for d in ov.get("deliveries") or []
+        ]
+        if deliveries:
+            # At least one innings has a ball-by-ball record, so this is not
+            # a scorecard-only match.
+            return False
+    return True
+
+
 def assess_match(match: dict, scorecard_innings: Optional[List[dict]] = None) -> MatchAssessment:
     """Assign a match its final tier in a single pass.
 
@@ -774,6 +801,9 @@ def assess_match(match: dict, scorecard_innings: Optional[List[dict]] = None) ->
     ``source_gap``
         Every hard issue is one of the disclosed source-gap shapes and the
         disagreement stays inside the published thresholds.
+    ``scorecard_only``
+        The match has a scorecard but no ball-by-ball record. The coverage
+        gap is disclosed rather than hidden, and the match stays published.
     ``failed``
         Anything else.
 
@@ -819,6 +849,16 @@ def assess_match(match: dict, scorecard_innings: Optional[List[dict]] = None) ->
                        for message in advisory_messages]
             return MatchAssessment("source_gap", errors=[], warnings=list(hard),
                                    issues=issues, source_gap=detail)
+
+    # A match with no deliveries at all is a scorecard-only record. The
+    # coverage gap is disclosed; the match is not dropped.
+    if _scorecard_only_match(match):
+        issues = [ValidationIssue("SCORECARD_ONLY_NO_COVERAGE", message) for message in hard]
+        return MatchAssessment(
+            "scorecard_only", errors=[], warnings=list(hard), issues=issues,
+            source_gap={"legal_ball_delta": 0, "runs_delta": 0, "wicket_delta": 0,
+                        "error_count": len(hard)},
+        )
 
     issues = [ValidationIssue(_source_gap_code(message) if _is_source_gap_message(message)
                               else "VALIDATION_FAILED", message) for message in hard]

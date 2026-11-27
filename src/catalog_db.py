@@ -33,7 +33,10 @@ SCHEMA_VERSION = 1
 NUM_SHARDS = 64
 
 #: The tiers a match can hold.
-TIERS = ("clean", "warning", "source_gap", "failed", "fetch_failed")
+TIERS = ("clean", "warning", "source_gap", "scorecard_only", "failed", "fetch_failed")
+
+#: The tiers that are admitted to the published lake.
+PUBLISHABLE_TIERS = ("clean", "warning", "source_gap", "scorecard_only")
 
 #: The maturity states a match can hold.
 MATURITY_STATES = ("provisional", "settled", "settled_incomplete", "legacy_unbacked")
@@ -311,9 +314,11 @@ def select_by_tier(connection: sqlite3.Connection, tier: str) -> List[str]:
 
 def select_publishable(connection: sqlite3.Connection) -> List[str]:
     """Match ids admitted to the published lake."""
+    placeholders = ", ".join("?" for _ in PUBLISHABLE_TIERS)
     cursor = connection.execute(
-        "SELECT match_id FROM matches WHERE validation_tier IN ('clean', 'warning', 'source_gap')"
-        " ORDER BY match_id"
+        f"SELECT match_id FROM matches WHERE validation_tier IN ({placeholders})"
+        " ORDER BY match_id",
+        list(PUBLISHABLE_TIERS),
     )
     return [str(row["match_id"]) for row in cursor]
 

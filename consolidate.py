@@ -101,6 +101,7 @@ def scan_and_consolidate(
     quarantined_matches = 0
     warning_matches = 0
     source_gap_matches = 0
+    scorecard_only_matches = 0
     invalid_matches = 0
 
     processed_mids: List[str] = []
@@ -128,7 +129,11 @@ def scan_and_consolidate(
         # warning list intact. They intentionally fail the strict validator;
         # the status is the audit trail, not a silent pass.
         is_source_gap = status == "source_gap"
-        validation_errors = [] if (is_quarantined or is_source_gap) else validate_inventory_candidate(data)
+        # A scorecard-only match has a scorecard but no ball-by-ball record.
+        # It was assessed and deliberately retained, like a source-gap record,
+        # so it is not re-validated here.
+        is_scorecard_only = status == "scorecard_only"
+        validation_errors = [] if (is_quarantined or is_source_gap or is_scorecard_only) else validate_inventory_candidate(data)
         if validation_errors:
             invalid_matches += 1
             failed_matches_all[mid] = "; ".join(validation_errors[:5])
@@ -138,6 +143,8 @@ def scan_and_consolidate(
             warning_matches += 1
         elif is_source_gap:
             source_gap_matches += 1
+        elif is_scorecard_only:
+            scorecard_only_matches += 1
         meta=data['meta']
         if meta.get('schema_version')=='3.0.0':legacy_unverified_matches+=1
         try:
@@ -256,6 +263,7 @@ def scan_and_consolidate(
             "quarantined_published": 0 if published_only else quarantined_matches,
             "warning_matches": warning_matches,
             "source_gap_matches": source_gap_matches,
+            "scorecard_only_matches": scorecard_only_matches,
             "invalid_matches": invalid_matches,
             "zero_delivery_matches": zero_delivery_matches,
             "legacy_unverified_matches":legacy_unverified_matches,
