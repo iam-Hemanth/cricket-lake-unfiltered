@@ -1,3 +1,8 @@
+> **HISTORICAL ARCHIVE (Pre-Refactor):** Superseded by `AGENTS.md` and
+> `HANDOFF.md`. Do NOT re-use the old batch, overlay, stage-index, queue or
+> manual-correction instructions below. The lake is now rebuilt from stored
+> raw payloads, and every match's authority is recorded in the catalog.
+
 # Missing matches — audit of 2026-10-25
 
 Reference universe: every completed men's match Statsguru lists for 2001–2026

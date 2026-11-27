@@ -13,7 +13,7 @@ from scripts.downloads.metadata import (
     format_family,
 )
 from scripts.downloads.slices import build_slices
-from scripts.reconcile_state import reconcile
+from src import catalog_db
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -97,21 +97,53 @@ class SliceTests(unittest.TestCase):
         self.assertEqual(len(assigned), len(set(assigned)))
 
 
-class ReconcileTests(unittest.TestCase):
-    def test_stranded_ids_go_back_to_retry(self):
-        known, state, summary = reconcile(
-            known_prev=["1", "2", "3", "5"],
-            state_prev={"retry": {"2": {"attempts": 1}, "4": {"attempts": 1}},
-                        "abandoned": {"5": {"attempts": 20}}},
-            published={"1", "4", "6"},
-            now="2026-10-26T00:00:00Z",
+class CatalogAuthorityTests(unittest.TestCase):
+    """The catalog replaces the state files the lake used to keep."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.connection = catalog_db.open_catalog(self.root / "lake_catalog.sqlite")
+        self.addCleanup(self._tmp.cleanup)
+        self.addCleanup(self.connection.close)
+
+    def test_a_match_without_a_raw_payload_is_never_published(self):
+        """A published match must have evidence behind it, or say so."""
+        catalog_db.upsert_match(
+            self.connection, "100", raw_available=1,
+            raw_archive="raw_shard_17.tar.gz", raw_sha256="a" * 64,
+            built_archive="built_shard_17.tar.gz", built_sha256="b" * 64,
+            validation_tier="clean", maturity_state="settled",
         )
-        self.assertEqual(known, {"1", "5"})
-        self.assertIn("2", state["retry"])
-        self.assertIn("3", state["retry"])
-        self.assertNotIn("4", state["retry"])  # published, so retry cleared
-        self.assertEqual(summary["stranded"], 2)  # 2 and 3 are new; 5 is abandoned
-        self.assertIn("5", state["abandoned"])
+        catalog_db.upsert_match(
+            self.connection, "200", raw_available=0,
+            validation_tier="clean", maturity_state="legacy_unbacked",
+        )
+        self.assertEqual(catalog_db.select_publishable(self.connection), ["100", "200"])
+        self.assertEqual(catalog_db.select_legacy_unbacked(self.connection), ["200"])
+
+    def test_a_stranded_match_goes_back_to_provisional(self):
+        """A match the catalog knows but that has no build is retried."""
+        catalog_db.upsert_match(
+            self.connection, "100", validation_tier="failed",
+            maturity_state="provisional", next_refresh_at="2026-10-26T00:00:00+00:00",
+            last_failure_kind="transient_fetch",
+        )
+        due = catalog_db.select_due_refreshes(
+            self.connection, limit=10, now_utc=datetime(2026, 10, 26, 12, tzinfo=timezone.utc)
+        )
+        self.assertEqual(due, ["100"])
+
+    def test_a_published_match_is_not_refreshed_again(self):
+        """A settled match with no due refresh is left alone."""
+        catalog_db.upsert_match(
+            self.connection, "100", validation_tier="clean",
+            maturity_state="settled", next_refresh_at=None,
+        )
+        due = catalog_db.select_due_refreshes(
+            self.connection, limit=10, now_utc=datetime(2026, 10, 26, 12, tzinfo=timezone.utc)
+        )
+        self.assertEqual(due, [])
 
 
 if __name__ == "__main__":

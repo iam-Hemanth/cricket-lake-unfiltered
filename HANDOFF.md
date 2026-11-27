@@ -1,130 +1,185 @@
-# Lake handoff — 10 Nov 2026 (audit fixes; dated calendar live)
+# Lake handoff
 
 This is the handoff for **this repository only** (`cricket-lake-unfiltered`).
-The CricStats app/API lives in a different repo (`/Users/hemanth/cstest`) and
-has its own handoff; do not apply its runbooks, ports or database rules here.
+The consumer app and its API live in a different repository; do not apply
+their runbooks, ports or database rules here.
 
-## Current published state
+Read [`AGENTS.md`](AGENTS.md) first. It holds the operating rules, the triage
+decision tree and the hard prohibitions. This file describes the state of
+the lake and how to operate it.
 
-- Catalog: https://iam-hemanth.github.io/cricket-lake-unfiltered/
-- Calendar: https://iam-hemanth.github.io/cricket-lake-unfiltered/calendar.html
-- **18,381 matches / 3.0 GB** in the master (run 42658234882); the catalog is
-  **18,384** (run 42756938088) with the three delta matches below. The date
-  range is **2001-12-19 to 2026-11-09**.
-- **1,289 warning-tier** and **230 source-gap-tier** matches are included; their
-  caveats are in `meta.validation_warnings` (source-gap files also carry
-  `meta.source_gap`). **650 quarantined** remain excluded.
-- `matches_index.csv` exposes `validation_status`: 16,862 clean / 1,289 warning
-  / 230 source-gap.
-- The dated calendar lists every published match by year, month and day. Each
-  match opens its innings and validation tier and downloads as a single
-  `m/<match_id>.json.gz`, decompressed in the browser. The per-match store is
-  18,384 files / 275 MB, rebuilt with the catalog.
+## The architecture in one paragraph
 
-## What ran (09 Nov)
+Every match the lake holds was fetched once and its **raw payload stored**.
+The lake is rebuilt from those stored payloads, never re-fetched to fix a
+bug. One function, `src/builder.py:build_match()`, produces every Match JSON,
+so the live extractor and the offline re-parser cannot disagree. A single
+SQLite catalog, `lake_catalog.sqlite.gz`, names for every match the archive
+that holds its raw payload, the archive that holds its built match, and the
+digest of each. The catalog is the only authority: nothing decides which
+file wins by looking at file names.
 
-1. **Re-fetch 42630708983** (14:01–14:59 UTC, 20 x 44): the merge job published
-   **552 pass / 328 fail**. The id filter had selected the first 880 *stored*-
-   failed ids, so all 552 passes were warn-tier matches already published and
-   552 quarantined ids were missed. The pass files added zero new ids.
-2. **Source-gap admission 42642702549**: 77 of the 328 admitted (asset
-   `matches_batch_sourcegap_20261109T151527Z-42642702549.tar.gz`).
-3. **Corrected re-fetch 42649214897** (15:53–16:40 UTC): the fixed filter
-   selected the true **880** still-failing ids and all 20 chunks ran in
-   parallel. Result: **0 pass / 880 fail** — a fresh parse reproduces every
-   failure, so these are source defects, not truncated originals.
-4. **Source-gap admission 42657718454**: **230 of the 880** admitted (97 FC,
-   59 T20, 31 List A, 25 T20I, 18 other). 77 were already published; **153 are
-   new**. Asset `matches_batch_sourcegap_20261109T164604Z-42657718454.tar.gz`
-   (sha256 verified, 230 files, all with status + warnings + delta record).
-5. **Consolidate 42658234882**: master **18,381**; quarantined **650**;
-   warning **1,289**; source-gap **230**; index carries the status column.
-6. **Catalog 42665379973**: 18,381 records, 197 slices, plus `calendar.html`,
-   `calendar.json` and the 18,381-file `m/` per-match store (275 MB). The
-   preflight now shares the master and deltas as one `source-archives`
-   artifact; 20 shards pulling the 233 MB master from the release CDN
-   concurrently had returned HTTP 500s on random shards.
+```
+ESPNcricinfo → raw layer (lake-raw) → build_match() → built layer (lake-built)
+                                                           → publish → published lake
+                        ↑                                              ↑
+                  lake_catalog.sqlite.gz decides everything
+```
 
-## 10 Nov — audit fixes and policy clarification
+## The releases
 
-- The catalog is now **18,384** (run 42756938088): master 18,381 plus the three
-  delta matches 1552531, 1561256, 1561257. The dated calendar and the
-  `m/<match_id>.json.gz` store are rebuilt at the same count.
-- Calendar detail scores now fall back to the delivery stream for schema 3.0
-  records (16,419 of 18,384); previously only `innings[].source_scorecard`
-  was read, so legacy cards showed dashes.
-- The catalog prune runs only after a successful Pages deploy; a failed deploy
-  no longer leaves the live catalog pointing at deleted zips. The deploy
-  timeout is 20 minutes for the 18k-file store.
-- Validator: a non-striker issue is exempt only when no source id was supplied
-  (a supplied but unresolved id is a contradiction); commentary drift is
-  capped at 50 runs when the innings reconciles (admitted corpus max 46).
-  Revalidation over the 2,169 recovery batch: **1,288 admitted / 881 fail**
-  (was 1,289/880). Match **1410220** (County Championship, 2024-05-17, 13
-  supplied-id issues) moves to review; the other 1,288 warn-tier matches are
-  unchanged.
-- Backfill uses a second-resolution stamp plus run id, caps the matrix at 256
-  jobs, and publishes finished chunks. The per-match store ingests deltas
-  newest-first, `consolidate.py` tolerates an over without `deliveries`, and
-  the 8 GiB preflight warns instead of deadlocking.
-- State: a deferred retry keeps its error, `reconcile_state` aborts on an
-  incomplete published view, `repair_state` shares `update_lake`'s concurrency,
-  and `refetch_quarantine` retries the source-batch download with backoff.
-- Expected next consolidate: 18,381 + 3 delta - 1 invalid = **18,383**;
-  warning **1,288**; source-gap **230**; quarantined **650**.
+| Tag | Holds | Written by |
+|---|---|---|
+| `lake-raw` | `raw_shard_NN.tar.gz`, `raw_pack_<stamp>.tar.gz` | `ingest.yml` |
+| `lake-built` | `built_shard_NN.tar.gz`, `built_pack_<stamp>.tar.gz` | `ingest.yml`, `reparse.yml` |
+| `lake-catalog` | `lake_catalog.sqlite.gz` | `ingest.yml`, `reparse.yml`, `pipeline_compact.py` |
+| `data-unfiltered-master` | the published snapshot: master archive, `matches_index.csv`, `lake_manifest.json` | `publish.yml` |
+| `lake-schedule` | the series schedule feed | `ingest.yml` (schedule job) |
 
-## 13 Nov — ESPN stage metadata
+A match belongs to shard `int(match_id) % 64`. Both layers use the same rule,
+so a match always lands in the same place.
 
-- `meta.match_stage`, `match_number`, `match_group` and raw `match_title` are now derived from the ESPN `match.title` / `match.finalType` pair in `src/stage.py`; the old `match.event.*` reads never produced values because ESPN has no `event` object.
-- Historical backfill: run `Build ESPN stage index` (`build_stage_index.yml`) once. It scans the unfiltered and curated `raw_batch_*.tar.gz` assets, writes `stage_index_<stamp>.json.gz` to `data-unfiltered-batches`, and reports ids with no raw payload.
-- `consolidate_full_lake.yml` applies the newest stage index after curated and delta inputs; `prepare.py`, `build_shard.py` and `calendar.py` apply it after their delta overlays so master JSON, slice CSVs and the per-match store agree.
-- The only expected raw gap is the ~440 published matches first extracted by the 6-hourly deltas after 6 Oct 2026; they keep null stage until a metadata refetch or re-extraction. No Cricsheet input is used for stage fields.
+## The workflows
 
-## 27 Nov — Series schedule feed
+There are four, and only four.
 
-- Added `scripts/scrape_schedule.py` (`lake_schedule_v1`) to scrape rolling 15-day fixture windows (`live-cricket-match-schedule-fixtures`, default 60 days), `live-cricket-match-results`, and active per-series fixture pages (`/series/{slug}-{objectId}/match-schedule-fixtures-and-results`), emitting `series_schedule.json` keyed by `(source_series_id, format_bucket)` with `classification.classify` and `derive_stage`.
-- Kept strictly separate from `extract.py`, `consolidate.py`, and `matches_index.csv` so unplayed/live matches never enter the completed ball-by-ball corpus.
-- `.github/workflows/update_lake.yml` adds a `schedule` job (6-hourly, independent of `has_new`) that uploads `series_schedule.json` and `schedule_summary.json` to release tag `lake-schedule`.
-- Verified with `tests/test_schedule_scraper.py` (226/226 unit tests passing) and a live scrape (`88` series buckets, `1,069` unique matches, `15/15` enriched series).
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `ingest.yml` | every 6 hours, or manual | Plans from the catalog, fetches in a 20-slot matrix, stores the raw payloads, builds, commits what changed |
+| `reparse.yml` | manual | Rebuilds from the stored raw payloads, **with no network access at all** |
+| `publish.yml` | nightly, or manual | Copies the built matches into the published snapshot, builds the master archive, compacts the packs |
+| `ci.yml` | every pull request and push to `main` | The test suite, including the architectural guardrails |
 
-## Next steps
+## The commands
 
-1. No repair is pending: every quarantined match was re-fetched today and still
-   fails. The residual needs new source data or a larger waiver, which is not
-   recommended.
-2. The 5 delta-window ids from 7–8 Nov (1561358, 1554068, 1555414, 1558436,
-   1559692) were never in the recovery batch and remain missing. The four older
-   ids 1554097/1554098 (women's) and 1558435/1558599 (running-score only) still
-   need source data.
-3. `update_lake.yml` dispatches consolidation as soon as it publishes a delta,
-   and consolidation dispatches the catalog rebuild, so a delta is folded and
-   published within roughly half an hour. The 02:30/04:30 UTC crons remain as
-   safety nets because GitHub can delay scheduled runs by several hours.
+```bash
+# What does the lake know? (read-only, one second)
+python scripts/inspect_catalog.py --summary
+python scripts/inspect_catalog.py --match-ids 1529281,1561358
+python scripts/inspect_catalog.py --stale-parser
+python scripts/inspect_catalog.py --provisional
+python scripts/inspect_catalog.py --quarantined
 
-## Rules specific to this repo
+# The tests
+.venv/bin/python -m pytest -q
+```
 
-- Pushes to `iam-Hemanth/cricket-lake-unfiltered` are expected; **never push
-  `/Users/hemanth/cstest`** (local only) and do not touch
-  `/Users/hemanth/cricket-stats`.
-- The gap batch is named `matches_batch_sourcegap_*` so it unpacks after the
-  recovery and refetch batches. The lexicographic order in
-  `consolidate_full_lake.yml` is the conflict policy:
-  `recovery` < `refetch` < `sourcegap` < `warned`. The newest sourcegap asset
-  wins for overlapping ids.
-- The 552 refetch pass assets from run 42630708983 duplicate already-published
-  matches; do not count them as recoveries.
-- The per-match store must stay under 700 MB (`scripts/downloads/calendar.py`
-  guard) because GitHub Pages limits a site to 1 GB. The store is rebuilt on
-  every catalog run; it is not a release asset.
-- No third-party storage, no card, no database writes are involved here.
+## The pipeline stages
 
-## Residual to explain, not hide
+Each stage is a script under `scripts/` and can be run on its own.
 
-- **650 quarantined**, all re-fetched today: 475 carry a disallowed error kind,
-  156 exceed the small-delta threshold, 19 have over-length overs with no
-  adjacent pair.
-- Two undated records (1535685, 1551344) make the master `README.txt` print
-  "Date Range: 2001-12-19 to Unknown"; the manifest and catalog date ranges are
-  correct.
-- The catalog is master + deltas by design, so a delta landing between the
-  consolidate and the catalog build makes the catalog slightly ahead.
+```bash
+# Plan: decide what to fetch. Nothing is written to the repository.
+python scripts/pipeline_ingest.py --plan --workdir ingest_work
+
+# Worker: fetch a chunk, store the raw payloads, build the matches.
+python scripts/pipeline_ingest.py --worker --chunk 0 --workdir ingest_work
+
+# Commit: keep what changed, upload it, update the catalog.
+python scripts/pipeline_ingest.py --commit --workdir ingest_work --upload
+
+# Rebuild offline, from the raw payloads.
+python scripts/pipeline_reparse.py --workdir reparse_work --upload
+
+# Publish the snapshot.
+python scripts/pipeline_publish.py --workdir publish_work --out published
+
+# Fold the packs back into the shards.
+python scripts/pipeline_compact.py --workdir compact_work --upload
+```
+
+## The validation tiers
+
+A match's tier is assigned in one pass by `src/validator.py:assess_match()`.
+
+| Tier | Meaning | Published |
+|---|---|---|
+| `clean` | No issues | Yes |
+| `warning` | The per-ball running counter disagrees with the scorecard, but the innings total reconciles | Yes, with `meta.validation_warnings` |
+| `source_gap` | The ball-by-ball and the scorecard differ by a small, disclosed amount | Yes, with `meta.validation_warnings` and `meta.source_gap` |
+| `failed` | A real contradiction | No |
+
+The tier is decided **per innings**, because the scorecard and the ball-by-ball
+can disagree about different innings in different ways. A running-counter
+drift in an innings whose total reconciles is advisory; a disagreement in an
+innings whose total does not reconcile is a contradiction.
+
+This matters when you change the validator. The warn tier exists because the
+running-total tolerance was relaxed from 2 runs to 50, so a warn-tier match
+**passes** the strict validator. A tier that is derived from the validator's
+error list alone would therefore be unreproducible. The drift is measured
+independently, and the tier is re-derived from that.
+
+**Verified against the published master:** all 2,309 schema 3.3.0 matches
+reproduce their published tier exactly (791 clean, 1,288 warning, 230 source
+gap). If you change the validator, re-run that check before publishing.
+
+## The maturity states
+
+A completed match can still be missing metadata ESPN publishes later.
+
+| State | Meaning |
+|---|---|
+| `provisional` | Recent, and something is missing. A refresh is scheduled |
+| `settled` | Complete |
+| `settled_incomplete` | Past the 14-day window (or out of refresh attempts) and still missing something. The gap is disclosed, never filled in |
+
+The refresh schedule is `+12h`, `+24h`, `+72h`, `+7d`. A refresh that finds
+an unchanged `raw_sha256` rebuilds nothing and only moves the attempt
+counter.
+
+## Failure kinds
+
+Failures carry an explicit kind. They are never inferred from the wording of
+an error message.
+
+`transient_fetch` · `uncompleted_match` · `construction_error` · `validation_failed`
+
+## What was removed, and why
+
+The previous arrangement kept its state in `known_ids.json`,
+`lake_state.json`, work lists in the repository, and a sidecar stage index
+that was merged into published matches after the fact. Ten workflows
+reimplemented the same overlay logic in slightly different orders, and four
+of them parsed human-readable validator error strings to patch matches
+after extraction.
+
+That produced two classes of silent damage:
+
+- The warn tier could not be re-derived, because the validator's tolerance
+  had moved past the threshold that created the tier.
+- A source-gap match could be revoked by an unrelated error appearing later.
+
+Both are gone. The tier is one function of one reading of the match, and
+`tests/test_architecture_guardrails.py` keeps the rest of the arrangement
+from coming back.
+
+## Constraints worth knowing
+
+- **Credentials.** `GITHUB_TOKEN` and `AKAMAI_KEY`. Nothing else. No new
+  dependency needs a key.
+- **Release limits.** GitHub Releases allow 1,000 assets per release and
+  2 GiB per asset. Pages allows a 1 GB site. The per-match store under `m/`
+  is capped at 700 MB.
+- **Scale.** The lake holds roughly 18,700 matches. Past about 40,000 the
+  `m/` store will not fit in the Pages limit, and the calendar will have to
+  drop it or move to object storage.
+- **Scope.** The lake's data comes from ESPN only. Do not join another
+  provider's data into a lake record; if ESPN has no value, leave it null.
+  The schedule feed (`lake-schedule`) is strictly separate from match
+  ingestion.
+
+## Where things are
+
+| Path | Holds |
+|---|---|
+| `src/builder.py` | `build_match()` — the single build path, and `PARSER_VERSION` |
+| `src/validator.py` | the strict checks, and `assess_match()` — the tier |
+| `src/completeness.py` | the completeness evaluator and the maturity state machine |
+| `src/catalog_db.py` | the catalog: schema, queries, the idempotency rule |
+| `src/shard_store.py` | packing, materializing and compacting the two layers |
+| `src/commentary.py` | the only place that talks to ESPN; stores every raw payload |
+| `src/release_store.py` | the only place that talks to GitHub releases |
+| `scripts/inspect_catalog.py` | the read-only diagnostic |
+| `scripts/pipeline_*.py` | the four pipeline stages |
+| `tests/test_architecture_guardrails.py` | the rules, enforced |

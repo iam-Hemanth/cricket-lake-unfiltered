@@ -1,0 +1,89 @@
+name: Reparse
+
+# Rebuild the lake from the raw payloads, without touching the network.
+#
+# This is the correct response to a parser bug. The raw payload of every
+# fetch is stored, so a parser change is applied offline by rebuilding from
+# those payloads. Re-fetching from ESPN to fix a parser bug would risk
+# losing data for no benefit.
+
+on:
+  workflow_dispatch:
+    inputs:
+      match_ids:
+        description: "Comma-separated match ids to rebuild (blank for the stale ones)"
+        required: false
+        type: string
+      force_all:
+        description: "Rebuild every published match, not only the stale ones"
+        required: false
+        type: boolean
+      limit:
+        description: "Maximum matches to rebuild"
+        required: false
+        type: number
+      dry_run:
+        description: "Report what would be rebuilt and stop"
+        required: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: reparse
+  cancel-in-progress: false
+
+jobs:
+  reparse:
+    name: Rebuild
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Rebuild the matches
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MATCH_IDS: ${{ inputs.match_ids }}
+          FORCE_ALL: ${{ inputs.force_all && '1' || '' }}
+          LIMIT: ${{ inputs.limit }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: |
+          EXTRA=""
+          if [ -n "$FORCE_ALL" ]; then EXTRA="$EXTRA --force"; fi
+          if [ -n "$LIMIT" ]; then EXTRA="$EXTRA --limit $LIMIT"; fi
+          if [ -n "$DRY_RUN" ]; then EXTRA="$EXTRA --dry-run"; fi
+          python scripts/pipeline_reparse.py \
+            --workdir reparse_work \
+            --match-ids "$MATCH_IDS" \
+            $EXTRA \
+            | tee reparse_summary.json
+
+  publish:
+    name: Publish
+    needs: reparse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Download the rebuilt matches
+        uses: actions/download-artifact@v4
+        with:
+          path: reparse_work
+      - name: Publish the rebuilt snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/pipeline_publish.py \
+            --workdir publish_work \
+            --catalog reparse_work/lake_catalog.sqlite.gz \
+            --out published \
+            | tee publish_summary.json

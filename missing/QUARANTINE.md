@@ -1,3 +1,8 @@
+> **HISTORICAL ARCHIVE (Pre-Refactor):** Superseded by `AGENTS.md` and
+> `HANDOFF.md`. Do NOT re-use the old batch, overlay, stage-index, queue or
+> manual-correction instructions below. The lake is now rebuilt from stored
+> raw payloads, and every match's authority is recorded in the catalog.
+
 # Quarantine audit — 2,169 matches (2026-11-09)
 
 Source: `matches_batch_recovery_20261025.tar.gz` on the `data-unfiltered-batches`

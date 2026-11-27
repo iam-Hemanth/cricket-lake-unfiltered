@@ -1,0 +1,53 @@
+name: CI
+
+# The tests, including the architectural guardrails, run on every pull
+# request and on every push to main.
+#
+# The guardrail suite is the part that matters most: it checks that the
+# repository still has the shape the lake depends on. A workflow that would
+# run the data pipeline from a side branch, a queue file that parks work
+# outside the catalog, or a downstream script that patches a built match all
+# fail here.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run the test suite
+        run: |
+          python -m pytest -q
+      - name: Check that the workflows are valid
+        if: matrix.python-version == '3.12'
+        run: |
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+          try:
+              import yaml
+          except ImportError:
+              print("PyYAML is not installed; skipping the workflow parse check.")
+              sys.exit(0)
+          for path in sorted(Path(".github/workflows").glob("*.yml")):
+              yaml.safe_load(path.read_text(encoding="utf-8"))
+              print(f"ok: {path}")
+          PY

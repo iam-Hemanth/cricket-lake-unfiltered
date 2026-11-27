@@ -398,80 +398,50 @@ class StageIndexTests(unittest.TestCase):
         self.assertEqual(row["match_title"], "2nd Final")
 
 
-class ProcessedIndexTests(unittest.TestCase):
-    """The stage index must see the 6-hourly delta archives, not only the bulk
-    raw batches: recovered/delta matches otherwise never enter the index."""
+class StageMetadataProvenanceTests(unittest.TestCase):
+    """The stage metadata must come from the stored payload, not a sidecar.
 
-    def _delta_tar(self, directory: Path) -> Path:
-        import io
-        import tarfile
+    A sidecar stage index used to be merged into the published matches after
+    the fact. The stage fields are now derived in the constructor from the
+    ESPN payload itself, so nothing needs to be merged afterwards and no
+    field can be dropped by a merge.
+    """
 
-        path = directory / "lake_delta_test.tar.gz"
-        doc = {
-            "match_id": "123",
-            "meta": {
-                "match_stage": "Final",
-                "match_number": 3,
-                "match_group": None,
-                "match_title": "Final",
-                "player_of_match_id": 42,
-                "player_of_match_name": "A Player",
-                "player_of_match_team": "A Team",
-                "player_of_series_id": None,
-                "source_series_id": 9,
-            },
-        }
-        raw = json.dumps(doc).encode("utf-8")
-        with tarfile.open(path, "w:gz") as tf:
-            info = tarfile.TarInfo("./123.json")
-            info.size = len(raw)
-            tf.addfile(info, io.BytesIO(raw))
-        return path
+    def test_the_stage_fields_come_from_the_source_payload(self):
+        raw = details()
+        raw["match"].update(title="2nd Final", finalType=1)
+        raw["match"]["series"] = {"id": 9, "objectId": 9, "name": "Indian Premier League"}
+        match, error = construct_match_v3("100", raw, {1: [ball()]}, {}, {}, {})
+        self.assertIsNone(error)
+        meta = match["meta"]
+        self.assertEqual(meta["match_stage"], "Final")
+        self.assertEqual(meta["match_number"], 2)
+        self.assertEqual(meta["match_title"], "2nd Final")
+        self.assertEqual(meta["source_series_id"], 9)
 
-    def test_processed_merge_never_drops_raw_fields(self):
-        import sys
+    def test_a_built_match_carries_the_stage_fields_without_a_sidecar(self):
+        from src.builder import References, build_match
 
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-        import build_stage_index
+        raw = details()
+        raw["match"].update(title="Final", finalType=1)
+        result = build_match("100", raw, {1: [ball()]}, References())
+        self.assertIsNotNone(result.match, result.error)
+        meta = result.match["meta"]
+        self.assertEqual(meta["match_stage"], "Final")
+        self.assertEqual(meta["parser_version"], "3.3.1-unified")
+        self.assertEqual(meta["validation_status"], result.tier)
 
-        raw = {"match_stage": "Final", "player_of_match_id": 42,
-               "source_series_id": 9}
-        meta = {"match_stage": "Semi Final", "player_of_match_id": None}
-        merged = build_stage_index._merge_processed({"123": raw}, "123", meta)
-        self.assertEqual(merged["match_stage"], "Semi Final")
-        self.assertEqual(merged["player_of_match_id"], 42)
-        self.assertEqual(merged["source_series_id"], 9)
+    def test_the_awards_fields_survive_the_build(self):
+        """The merge step used to be able to drop a field; nothing does now."""
+        from src.builder import References, build_match
 
-    def test_processed_reader_and_index(self):
-        import sys
-
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-        import build_stage_index
-
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            path = self._delta_tar(tmp_path)
-            entries = dict(build_stage_index._iter_processed_tar(path))
-            self.assertEqual(entries["123"]["match_stage"], "Final")
-            self.assertEqual(entries["123"]["player_of_match_id"], 42)
-
-            out = tmp_path / "index.json.gz"
-            argv = sys.argv
-            sys.argv = [
-                "build_stage_index.py",
-                "--processed-tar", str(path),
-                "--output", str(out),
-            ]
-            try:
-                self.assertEqual(build_stage_index.main(), 0)
-            finally:
-                sys.argv = argv
-            import gzip
-
-            doc = json.load(gzip.open(out))
-            self.assertEqual(doc["counts"]["processed_matches"], 1)
-            self.assertEqual(doc["counts"]["indexed"], 1)
-            self.assertEqual(doc["matches"]["123"]["source_series_id"], 9)
+        raw = details()
+        result = build_match("100", raw, {1: [ball()]}, References())
+        self.assertIsNotNone(result.match, result.error)
+        meta = result.match["meta"]
+        for field in ("player_of_match_id", "player_of_match_name",
+                      "player_of_match_team", "source_series_id"):
+            self.assertIn(field, meta)
 
 
 if __name__ == "__main__":

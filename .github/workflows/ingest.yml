@@ -1,0 +1,176 @@
+name: Ingest
+
+# The lake's only path for new data. Every match the lake gains arrives
+# through this workflow: the plan comes from the catalog, the workers fetch
+# and store the raw payloads, and the commit step publishes only what
+# actually changed.
+#
+# There is no queue file and no patch list. A match that could not be
+# fetched is recorded in the catalog as provisional, and the next run picks
+# it up again.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "Earliest match date to discover (YYYY-MM-DD)"
+        required: false
+        type: string
+      match_ids:
+        description: "Comma-separated match ids to fetch"
+        required: false
+        type: string
+      force_refresh:
+        description: "Fetch the named matches even when they are settled"
+        required: false
+        type: boolean
+      max_matches:
+        description: "Maximum matches to fetch in this run"
+        required: false
+        type: number
+      dry_run:
+        description: "Plan only; fetch nothing"
+        required: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      chunk_list: ${{ steps.plan.outputs.chunk_list }}
+      selected: ${{ steps.plan.outputs.selected }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Work out what to fetch
+        id: plan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_REFRESH: ${{ inputs.force_refresh && '1' || '' }}
+          SINCE: ${{ inputs.since }}
+          MATCH_IDS: ${{ inputs.match_ids }}
+          MAX_MATCHES: ${{ inputs.max_matches || 400 }}
+        run: |
+          EXTRA=""
+          if [ -n "$FORCE_REFRESH" ]; then EXTRA="$EXTRA --force-refresh"; fi
+          if [ -n "$SINCE" ]; then EXTRA="$EXTRA --since $SINCE --discover"; fi
+          python scripts/pipeline_ingest.py --plan \
+            --workdir ingest_work \
+            --match-ids "$MATCH_IDS" \
+            --max-matches "$MAX_MATCHES" $EXTRA \
+            | tee plan_summary.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          plan = json.load(open("ingest_work/ingest_plan.json"))
+          print(f"chunk_list={json.dumps([c['chunk'] for c in plan['chunks']])}")
+          print(f"selected={plan['total_selected']}")
+          PY
+      - name: Upload the plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingest-plan
+          path: ingest_work/ingest_plan.json
+          retention-days: 7
+
+  fetch:
+    name: Fetch chunk ${{ matrix.chunk }}
+    needs: plan
+    if: ${{ !inputs.dry_run && needs.plan.outputs.selected != '0' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        chunk: ${{ fromJSON(needs.plan.outputs.chunk_list) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Download the plan
+        uses: actions/download-artifact@v4
+        with:
+          name: ingest-plan
+          path: ingest_work
+      - name: Fetch and build the chunk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AKAMAI_KEY: ${{ secrets.AKAMAI_KEY }}
+        run: |
+          python scripts/pipeline_ingest.py --worker \
+            --chunk ${{ matrix.chunk }} \
+            --workdir ingest_work \
+            --delay 0.6
+      - name: Upload the raw payloads and the built matches
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingest-chunk-${{ matrix.chunk }}
+          path: |
+            ingest_work/raw/
+            ingest_work/built/
+            ingest_work/chunk_results_${{ matrix.chunk }}.json
+          retention-days: 7
+
+  commit:
+    name: Commit
+    needs: [plan, fetch]
+    if: ${{ !inputs.dry_run && needs.plan.outputs.selected != '0' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Download the worker artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ingest_work
+          merge-multiple: true
+      - name: Publish what changed
+        id: commit
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/pipeline_ingest.py --commit \
+            --workdir ingest_work \
+            --upload | tee commit_summary.json
+
+  schedule:
+    name: Schedule feed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Refresh the series schedule
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AKAMAI_KEY: ${{ secrets.AKAMAI_KEY }}
+        run: python scripts/scrape_schedule.py --output schedule_feed.json
+      - name: Upload the schedule feed
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload lake-schedule schedule_feed.json \
+            --repo ${{ github.repository }} --clobber

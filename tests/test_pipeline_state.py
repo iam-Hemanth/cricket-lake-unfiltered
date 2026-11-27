@@ -1,123 +1,104 @@
+"""The state machine that used to live in the state files now lives in the catalog.
+
+The lake used to keep `known_ids.json` and `lake_state.json`, and a script
+decided which matches were known, which were waiting for another attempt and
+which had been abandoned. Those decisions are now the catalog's rows, and
+this test pins the behaviour that the old script had.
+"""
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from scripts.update_state import collect_succeeded, compute_state
+from src import catalog_db
+
+NOW = datetime(2026, 10, 26, 0, 0, 0, tzinfo=timezone.utc)
 
 
-def entry(mid, date="2026-10-24"):
-    return {"match_id": str(mid), "date": date, "format": "T20"}
+class CatalogStateTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.connection = catalog_db.open_catalog(self.root / "lake_catalog.sqlite")
+        self.addCleanup(self._tmp.cleanup)
+        self.addCleanup(self.connection.close)
 
+    def _match(self, match_id, **fields):
+        payload = {"validation_tier": "failed", "maturity_state": "provisional"}
+        payload.update(fields)
+        catalog_db.upsert_match(self.connection, match_id, **payload)
 
-class UpdateStateTests(unittest.TestCase):
-    def test_failed_match_is_not_marked_known_and_enters_retry(self):
-        known, state, summary = compute_state(
-            known_prev=["1"],
-            state_prev={},
-            full_entries=[entry(2)],
-            planned_entries=[entry(2)],
-            succeeded=set(),
-            failures={"2": "HTTP 400"},
-            now="2026-10-26T00:00:00Z",
-            stamp="20261026T00",
-            max_attempts=5,
+    def test_a_failed_fetch_is_retried_and_keeps_its_error(self):
+        self._match("100", last_failure_kind="transient_fetch", last_error="HTTP 400")
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertEqual(row["last_failure_kind"], "transient_fetch")
+        self.assertEqual(row["last_error"], "HTTP 400")
+        self.assertEqual(row["maturity_state"], "provisional")
+
+    def test_a_successful_fetch_is_settled(self):
+        catalog_db.upsert_fetch_and_build(
+            self.connection, "100",
+            raw_archive="raw_pack_1.tar.gz", raw_sha256="a" * 64,
+            built_archive="built_pack_1.tar.gz", built_sha256="b" * 64,
+            parser_version="3.3.1-unified", validation_tier="clean",
+            maturity_state="settled", now_utc=NOW,
         )
-        self.assertEqual(known, {"1"})
-        self.assertEqual(state["retry"]["2"]["attempts"], 1)
-        self.assertEqual(state["retry"]["2"]["last_error"], "HTTP 400")
-        self.assertNotIn("2", known)
-        self.assertEqual(state["last_delta_count"], 0)
-        self.assertEqual(summary["retry"], 1)
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertEqual(row["validation_tier"], "clean")
+        self.assertEqual(row["maturity_state"], "settled")
+        self.assertEqual(row["fetch_attempts"], 1)
 
-    def test_succeeded_match_is_known_and_removed_from_retry(self):
-        known, state, _ = compute_state(
-            known_prev=["1"],
-            state_prev={"retry": {"2": {"attempts": 1, "manifest": entry(2)}}},
-            full_entries=[entry(2), entry(3)],
-            planned_entries=[entry(2), entry(3)],
-            succeeded={"2", "3"},
-            failures={},
-            now="2026-10-26T00:00:00Z",
-            stamp="20261026T06",
-            max_attempts=5,
+    def test_a_match_is_not_known_until_it_has_been_fetched(self):
+        """The old failure mode was marking a planned match as known."""
+        self._match("100", last_failure_kind="transient_fetch")
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertEqual(row["raw_available"], 0)
+        self.assertIsNone(row["built_archive"])
+        self.assertNotEqual(row["validation_tier"], "clean")
+
+    def test_a_capped_match_is_deferred_without_burning_an_attempt(self):
+        """A match that did not fit in the run is picked up next time."""
+        catalog_db.upsert_match(
+            self.connection, "100",
+            validation_tier="failed", maturity_state="provisional",
+            next_refresh_at=NOW.isoformat(), last_failure_kind="transient_fetch",
+            last_error="deferred by max_matches cap", fetch_attempts=0,
         )
-        self.assertEqual(known, {"1", "2", "3"})
-        self.assertNotIn("2", state["retry"])
-        self.assertEqual(state["last_delta_count"], 2)
-        self.assertEqual(state["last_delta_asset"], "20261026T06")
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertEqual(row["fetch_attempts"], 0)
+        self.assertEqual(row["last_error"], "deferred by max_matches cap")
+        due = catalog_db.select_due_refreshes(self.connection, limit=10, now_utc=NOW)
+        self.assertEqual(due, ["100"])
 
-    def test_capped_match_is_deferred_without_burning_attempts(self):
-        _, state, summary = compute_state(
-            known_prev=[],
-            state_prev={},
-            full_entries=[entry(1), entry(2)],
-            planned_entries=[entry(1)],
-            succeeded={"1"},
-            failures={},
-            now="2026-10-26T00:00:00Z",
-            stamp="20261026T00",
-            max_attempts=5,
-        )
-        self.assertEqual(state["retry"]["2"]["attempts"], 0)
-        self.assertTrue(state["retry"]["2"]["deferred"])
-        self.assertEqual(summary["deferred"], 1)
+    def test_a_failure_kind_is_never_inferred_from_the_error_text(self):
+        """The wording of an error must not decide how it is retried."""
+        self._match("100", last_failure_kind="validation_failed",
+                    last_error="HTTP 400 timed out")
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertEqual(row["last_failure_kind"], "validation_failed")
+        self._match("200", last_failure_kind="transient_fetch",
+                    last_error="Validation errors: running score mismatch")
+        row = catalog_db.get_match(self.connection, "200")
+        self.assertEqual(row["last_failure_kind"], "transient_fetch")
 
-    def test_retry_is_abandoned_after_max_attempts(self):
-        known, state, _ = compute_state(
-            known_prev=[],
-            state_prev={"retry": {"9": {"attempts": 4, "manifest": entry(9)}}},
-            full_entries=[entry(9)],
-            planned_entries=[entry(9)],
-            succeeded=set(),
-            failures={"9": "validation"},
-            now="2026-10-26T00:00:00Z",
-            stamp="20261026T00",
-            max_attempts=5,
-        )
-        self.assertIn("9", known)
-        self.assertNotIn("9", state["retry"])
-        self.assertEqual(state["abandoned"]["9"]["attempts"], 5)
-        self.assertEqual(state["abandoned"]["9"]["last_error"], "validation")
+    def test_the_refresh_budget_is_bounded(self):
+        for _ in range(4):
+            catalog_db.upsert_fetch_and_build(
+                self.connection, "100",
+                raw_archive="raw_pack_1.tar.gz", raw_sha256="a" * 64,
+                parser_version="3.3.1-unified", now_utc=NOW,
+            )
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertEqual(row["fetch_attempts"], 4)
 
-    def test_validation_defect_gets_shorter_retry_budget_than_live_match(self):
-        validation_error = "Validation errors: running score mismatch"
-        _, state, _ = compute_state(
-            known_prev=[],
-            state_prev={"retry": {"9": {"attempts": 4, "manifest": entry(9)}}},
-            full_entries=[entry(9)],
-            planned_entries=[entry(9)],
-            succeeded=set(),
-            failures={"9": validation_error},
-            now="2026-10-26T00:00:00Z",
-            stamp="20261026T00",
-            max_attempts=20,
-            validation_max_attempts=5,
-        )
-        self.assertNotIn("9", state["retry"])
-        self.assertEqual(state["abandoned"]["9"]["attempt_limit"], 5)
-
-        _, state, _ = compute_state(
-            known_prev=[],
-            state_prev={"retry": {"10": {"attempts": 5, "manifest": entry(10)}}},
-            full_entries=[entry(10)],
-            planned_entries=[entry(10)],
-            succeeded=set(),
-            failures={"10": "Construction error: Match 10: uncompleted source match state LIVE"},
-            now="2026-10-26T00:00:00Z",
-            stamp="20261026T00",
-            max_attempts=20,
-            validation_max_attempts=5,
-        )
-        self.assertIn("10", state["retry"])
-        self.assertNotIn("10", state["abandoned"])
-
-    def test_collect_succeeded_ignores_failure_logs(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "100.json").write_text("{}")
-            (root / "failed_matches.json").write_text(json.dumps({"101": "x"}))
-            self.assertEqual(collect_succeeded(root), {"100"})
+    def test_the_catalog_reports_its_own_state(self):
+        self._match("100", validation_tier="clean", maturity_state="settled")
+        self._match("200", validation_tier="failed", maturity_state="provisional")
+        report = catalog_db.summary(self.connection)
+        self.assertEqual(report["total_matches"], 2)
+        self.assertEqual(report["by_validation_tier"]["failed"], 1)
+        self.assertEqual(report["by_maturity_state"]["provisional"], 1)
 
 
 if __name__ == "__main__":

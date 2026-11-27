@@ -1,0 +1,91 @@
+name: Publish
+
+# Turn the catalog and the built layer into the published lake.
+#
+# This stage reads. It copies the built matches the catalog names, verifies
+# their digests, and writes the published snapshot: the master archive, the
+# match index, the download slices and the dated calendar. Nothing here
+# changes a match.
+
+on:
+  workflow_dispatch:
+    inputs:
+      compact:
+        description: "Fold the pending packs into the shards as well"
+        required: false
+        type: boolean
+      prune:
+        description: "Delete the compacted packs from the release"
+        required: false
+        type: boolean
+  schedule:
+    - cron: "30 2 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish the snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Build the published snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/pipeline_publish.py \
+            --workdir publish_work \
+            --out published \
+            | tee publish_summary.json
+      - name: Build the master archive and the index
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python consolidate.py \
+            --input-dirs published/matches \
+            --output-dir published/master_matches \
+            --manifest-path published/lake_manifest.json \
+            --archive-path published/cricket_lake_unfiltered_master.tar.gz \
+            --published-only
+      - name: Upload the published snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload data-unfiltered-master \
+            published/cricket_lake_unfiltered_master.tar.gz \
+            published/matches_index.csv \
+            published/lake_manifest.json \
+            --repo ${{ github.repository }} --clobber
+
+  compact:
+    name: Compact the shards
+    if: ${{ inputs.compact || github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Fold the packs into the shards
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRUNE: ${{ inputs.prune && '1' || '' }}
+        run: |
+          EXTRA=""
+          if [ -n "$PRUNE" ]; then EXTRA="$EXTRA --prune"; fi
+          python scripts/pipeline_compact.py \
+            --workdir compact_work \
+            --upload $EXTRA \
+            | tee compact_summary.json

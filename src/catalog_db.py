@@ -8,7 +8,7 @@ Match JSON, together with the digest of each. Nothing else in the lake
 decides which file wins: the catalog does, by lookup.
 
 That replaces the previous arrangement, in which ``known_ids.json``,
-``lake_state.json``, ``queues/*.json`` and the order of the tarballs in a
+``lake_state.json``, the ad-hoc work lists and the order of the tarballs in a
 release decided the content of the lake. Those are all derivable from this
 one table, and so is the answer to "why does this match look like this?".
 """
