@@ -110,13 +110,20 @@ A match's tier is assigned in one pass by `src/validator.py:assess_match()`.
 | `clean` | No issues | Yes |
 | `warning` | The per-ball running counter disagrees with the scorecard, but the innings total reconciles | Yes, with `meta.validation_warnings` |
 | `source_gap` | The ball-by-ball and the scorecard differ by a small, disclosed amount | Yes, with `meta.validation_warnings` and `meta.source_gap` |
-| `scorecard_only` | ESPN published the scorecard but no ball-by-ball commentary | Yes, with `meta.validation_warnings` |
+| `scorecard_only` | ESPN published the scorecard but no ball-by-ball commentary for an innings | Yes, with `meta.validation_warnings` |
+| `coverage_gap` | The commentary is a truncated prefix of the scorecard | Yes, with `meta.validation_warnings` |
 | `failed` | A real contradiction | No |
 
-A quarter of the raw bundles hold a scorecard but no commentary. Those
-matches are admitted at the `scorecard_only` tier rather than dropped: the
-record is not corrupt, it simply has no deliveries, and rejecting it would
-drop a match ESPN really did publish.
+Two kinds of record made the old arrangement's silence necessary. A quarter
+of the raw bundles carry a scorecard but no commentary at all, and a few
+hundred more carry commentary that stops before the end of the innings. Both
+are admitted with the gap disclosed, because rejecting them would drop
+matches ESPN really did publish.
+
+The distinction that matters is between a record that is *short* and one that
+*disagrees*. A truncated commentary never has more balls, runs or wickets
+than the scorecard describes; it is a prefix of it. A record that exceeds
+the scorecard is a contradiction, and it still fails.
 
 The tier is decided **per innings**, because the scorecard and the ball-by-ball
 can disagree about different innings in different ways. A running-counter
