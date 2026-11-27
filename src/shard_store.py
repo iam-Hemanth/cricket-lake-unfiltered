@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from src.catalog_db import NUM_SHARDS
+from src.commentary import raw_payload_files
 
 #: The layers the lake stores.
 LAYER_RAW = "raw"
@@ -140,7 +141,7 @@ def collect_raw_members(raw_match_dirs: Dict[str, Path]) -> Dict[str, bytes]:
     """
     members: Dict[str, bytes] = {}
     for match_id, directory in raw_match_dirs.items():
-        for path in sorted(Path(directory).glob("*.json.gz")):
+        for path in raw_payload_files(directory):
             with gzip.open(path, "rb") as handle:
                 members[f"{match_id}/{path.name}"] = handle.read()
     return members

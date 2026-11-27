@@ -33,10 +33,12 @@ SCHEMA_VERSION = 1
 NUM_SHARDS = 64
 
 #: The tiers a match can hold.
-TIERS = ("clean", "warning", "source_gap", "scorecard_only", "failed", "fetch_failed")
+TIERS = ("clean", "warning", "source_gap", "scorecard_only", "coverage_gap",
+          "failed", "fetch_failed")
 
 #: The tiers that are admitted to the published lake.
-PUBLISHABLE_TIERS = ("clean", "warning", "source_gap", "scorecard_only")
+PUBLISHABLE_TIERS = ("clean", "warning", "source_gap", "scorecard_only",
+                     "coverage_gap")
 
 #: The maturity states a match can hold.
 MATURITY_STATES = ("provisional", "settled", "settled_incomplete", "legacy_unbacked")

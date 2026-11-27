@@ -433,6 +433,7 @@
             "warning",
             "source_gap",
             "scorecard_only",
+            "coverage_gap",
             "failed"
           ],
           "description": "The tier assigned to the match in one assessment pass."

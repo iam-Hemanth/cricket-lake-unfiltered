@@ -131,7 +131,7 @@ def materialize_published(
     targets: Dict[str, List[str]] = {}
     for row in connection.execute(
         "SELECT match_id, built_archive FROM matches"
-        " WHERE validation_tier IN ('clean', 'warning', 'source_gap', 'scorecard_only')"
+        " WHERE validation_tier IN ('clean', 'warning', 'source_gap', 'scorecard_only', 'coverage_gap')"
         "   AND built_archive IS NOT NULL ORDER BY match_id"
     ):
         targets.setdefault(str(row["built_archive"]), []).append(str(row["match_id"]))
@@ -143,7 +143,7 @@ def materialize_published(
         str(row["match_id"]): row["built_sha256"]
         for row in connection.execute(
             "SELECT match_id, built_sha256 FROM matches"
-            " WHERE validation_tier IN ('clean', 'warning', 'source_gap', 'scorecard_only')"
+            " WHERE validation_tier IN ('clean', 'warning', 'source_gap', 'scorecard_only', 'coverage_gap')"
         )
     }
 

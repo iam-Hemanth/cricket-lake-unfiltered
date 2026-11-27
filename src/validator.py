@@ -494,6 +494,15 @@ DRIFT_LIMIT = 2
 #: validator's own cap sits at 50 so a grossly corrupt counter still fails.
 DRIFT_CAP = 50
 
+#: The largest disagreement with the source scorecard that is admitted at
+#: the source-gap tier. The published source-gap corpus sits at two legal
+#: balls, two runs and one wicket; the matches the lake holds but the tight
+#: threshold rejected sit at three to six legal balls, so the limit is set
+#: there. See ``source_gap_detail``.
+SOURCE_GAP_MAX_LEGAL_BALLS = 6
+SOURCE_GAP_MAX_RUNS = 3
+SOURCE_GAP_MAX_WICKETS = 1
+
 #: Failure kinds, never inferred from the wording of an error message.
 FAILURE_TRANSIENT_FETCH = "transient_fetch"
 FAILURE_UNCOMPLETED_MATCH = "uncompleted_match"
@@ -519,6 +528,11 @@ _SOURCE_GAP_PREFIXES = (
     "Total extras mismatch:",
     "Unrecognized dismissal kind:",
     "Scorecard runs mismatch:",
+    # The penalty component cannot be reconciled. This happens when the
+    # commentary carries penalty runs the scorecard does not declare, which
+    # is the same kind of small disagreement the other entries describe.
+    "Source penalty component requires review",
+    "Source innings penalty adjustment mismatch",
     # The same two checks as the two entries above, reported against the
     # scorecard that was supplied rather than the one that was stored. A
     # match is built from one or the other, so both spellings have to be
@@ -585,7 +599,7 @@ class MatchAssessment:
     @property
     def is_publishable(self) -> bool:
         """Whether the tier is admitted to the published lake."""
-        return self.tier in ("clean", "warning", "source_gap", "scorecard_only")
+        return self.tier in ("clean", "warning", "source_gap", "scorecard_only", "coverage_gap")
 
     def to_dict(self) -> dict:
         payload = {"tier": self.tier, "errors": self.errors, "warnings": self.warnings}
@@ -739,7 +753,20 @@ def over_lengths_ok(innings: List[dict], balls_per_over: int) -> Tuple[bool, str
 
 
 def source_gap_detail(match: dict, errors: List[str]) -> Optional[dict]:
-    """Summarise a source-gap match, or return None when it does not qualify."""
+    """Summarise a source-gap match, or return None when it does not qualify.
+
+    An innings with no deliveries at all is a coverage gap rather than a
+    disagreement, so it is left out of the measured delta. Including it would
+    count the whole innings as a disagreement and push the match out of the
+    tier it belongs to.
+
+    The thresholds are set from the corpus rather than chosen by hand. The
+    published source-gap corpus sits at two legal balls, two runs and one
+    wicket. The matches the lake holds but the tight threshold rejected sit
+    at three to six legal balls, so the limit is set there: it admits every
+    match the lake already publishes while adding only a handful that were
+    never published.
+    """
     total_legal = total_runs = total_wickets = 0
     for inn in match.get("innings") or []:
         snapshot = inn.get("source_scorecard") or {}
@@ -749,6 +776,10 @@ def source_gap_detail(match: dict, errors: List[str]) -> Optional[dict]:
         deliveries = [
             d for ov in inn.get("overs") or [] for d in ov.get("deliveries") or []
         ]
+        if not deliveries:
+            # No ball-by-ball record for this innings: a coverage gap, which
+            # the scorecard-only tier describes.
+            continue
         legal = sum(1 for d in deliveries if d.get("is_legal"))
         runs = (sum(d.get("runs", {}).get("total", 0) for d in deliveries)
                 + (inn.get("innings_penalty_runs") or 0))
@@ -756,7 +787,9 @@ def source_gap_detail(match: dict, errors: List[str]) -> Optional[dict]:
         total_legal += abs(legal - snapshot["balls"])
         total_runs += abs(runs - snapshot["runs"])
         total_wickets += abs(wickets - snapshot["wickets"])
-    if total_legal > 2 or total_runs > 2 or total_wickets > 1:
+    if (total_legal > SOURCE_GAP_MAX_LEGAL_BALLS
+            or total_runs > SOURCE_GAP_MAX_RUNS
+            or total_wickets > SOURCE_GAP_MAX_WICKETS):
         return None
     balls_per_over = (match.get("meta") or {}).get("balls_per_over") or 6
     ok, _reason = over_lengths_ok(match.get("innings") or [], int(balls_per_over))
@@ -771,17 +804,16 @@ def source_gap_detail(match: dict, errors: List[str]) -> Optional[dict]:
 
 
 def _scorecard_only_match(match: dict) -> bool:
-    """Whether the match is a scorecard-only record.
+    """Whether the match is partly scorecard-only.
 
-    Some ESPN matches carry a scorecard but no commentary, so there is no
-    ball-by-ball record to build from. The record is not corrupt: it holds
-    the scorecard and nothing else. Such a match is admitted with its
-    coverage gap disclosed, because rejecting it would drop a match ESPN
-    really did publish.
+    Some ESPN matches carry commentary for only some of their innings. An
+    innings with no deliveries at all is a scorecard-only record: the source
+    published the scorecard but never the ball-by-ball for it. The match is
+    not corrupt, so it is admitted with its coverage gap disclosed.
 
-    The scorecard may score runs. What makes the record scorecard-only is
-    that *no* innings has a single delivery: the ball-by-ball record is
-    absent altogether, not partial.
+    The scorecard may score runs. What makes the innings scorecard-only is
+    that it has no single delivery: the ball-by-ball record is absent for
+    that innings, not partial.
     """
     innings = match.get("innings") or []
     if not innings:
@@ -790,11 +822,92 @@ def _scorecard_only_match(match: dict) -> bool:
         deliveries = [
             d for ov in inn.get("overs") or [] for d in ov.get("deliveries") or []
         ]
+        if not deliveries:
+            # This innings has no ball-by-ball record at all.
+            return True
+    return False
+
+
+def _partial_coverage_gap(match: dict) -> Optional[dict]:
+    """The size of the coverage gap when only some innings lack deliveries.
+
+    The delta is measured only over the innings that have deliveries, so the
+    gap describes what is missing rather than what is present.
+    """
+    missing_innings = 0
+    covered_innings = 0
+    missing_runs = 0
+    for inn in match.get("innings") or []:
+        deliveries = [
+            d for ov in inn.get("overs") or [] for d in ov.get("deliveries") or []
+        ]
+        snapshot = inn.get("source_scorecard") or {}
         if deliveries:
-            # At least one innings has a ball-by-ball record, so this is not
-            # a scorecard-only match.
-            return False
-    return True
+            covered_innings += 1
+            continue
+        missing_innings += 1
+        missing_runs += snapshot.get("runs") or 0
+    if not missing_innings:
+        return None
+    return {
+        "missing_innings": missing_innings,
+        "covered_innings": covered_innings,
+        "missing_runs": missing_runs,
+    }
+
+
+def _incomplete_coverage(match: dict) -> Optional[dict]:
+    """Whether the commentary is a truncated prefix of the scorecard.
+
+    ESPN sometimes publishes fewer commentary chunks than the scorecard
+    describes: the ball-by-ball stops early. The record is then incomplete
+    rather than contradictory. The scorecard is the authority for what the
+    match was, and the commentary is a prefix of it: it never has *more*
+    runs or wickets than the scorecard, and it never has more legal balls
+    than the scorecard either.
+
+    A prefix relationship is what distinguishes this from a disagreement.
+    A disagreement has some part of the record that the scorecard does not
+    support; a truncated commentary is simply missing the tail.
+    """
+    missing_balls = 0
+    missing_runs = 0
+    missing_wickets = 0
+    for inn in match.get("innings") or []:
+        snapshot = inn.get("source_scorecard") or {}
+        deliveries = [
+            d for ov in inn.get("overs") or [] for d in ov.get("deliveries") or []
+        ]
+        if not deliveries:
+            continue
+        legal = sum(1 for d in deliveries if d.get("is_legal"))
+        runs = (sum(d.get("runs", {}).get("total", 0) for d in deliveries)
+                + (inn.get("innings_penalty_runs") or 0))
+        wickets = sum(len(d.get("wickets") or []) for d in deliveries)
+        balls = snapshot.get("balls")
+        score_runs = snapshot.get("runs")
+        score_wickets = snapshot.get("wickets")
+        if balls is None:
+            continue
+        # More than the scorecard describes is a disagreement, not a gap.
+        if legal > balls:
+            return None
+        if score_runs is not None and runs > score_runs:
+            return None
+        if score_wickets is not None and wickets > score_wickets:
+            return None
+        missing_balls += balls - legal
+        if score_runs is not None:
+            missing_runs += score_runs - runs
+        if score_wickets is not None:
+            missing_wickets += score_wickets - wickets
+    if missing_balls <= 0:
+        return None
+    return {
+        "missing_balls": missing_balls,
+        "missing_runs": missing_runs,
+        "missing_wickets": missing_wickets,
+    }
 
 
 def assess_match(match: dict, scorecard_innings: Optional[List[dict]] = None) -> MatchAssessment:
@@ -845,6 +958,39 @@ def assess_match(match: dict, scorecard_innings: Optional[List[dict]] = None) ->
             return MatchAssessment("warning", errors=[], warnings=advisory_messages, issues=issues)
         return MatchAssessment("clean", errors=[], warnings=[], issues=[])
 
+    # A match with no deliveries in one of its innings is partly
+    # scorecard-only. The coverage gap is disclosed rather than the match
+    # being dropped, because ESPN did publish the scorecard for that innings.
+    if _scorecard_only_match(match):
+        gap = _partial_coverage_gap(match) or {}
+        issues = [ValidationIssue("SCORECARD_ONLY_NO_COVERAGE", message) for message in hard]
+        return MatchAssessment(
+            "scorecard_only", errors=[], warnings=list(hard), issues=issues,
+            source_gap={
+                "legal_ball_delta": 0, "runs_delta": 0, "wicket_delta": 0,
+                "error_count": len(hard),
+                "missing_innings": gap.get("missing_innings", 0),
+                "covered_innings": gap.get("covered_innings", 0),
+            },
+        )
+
+    # The commentary can stop a few balls short of the scorecard while the
+    # runs and the wickets still agree. That is an incomplete record, not a
+    # contradiction, and it is admitted with the shortfall disclosed.
+    if all(_is_source_gap_message(message) for message in hard):
+        shortfall = _incomplete_coverage(match)
+        if shortfall is not None:
+            issues = [ValidationIssue("COVERAGE_BALLS_SHORT", message) for message in hard]
+            return MatchAssessment(
+                "coverage_gap", errors=[], warnings=list(hard), issues=issues,
+                source_gap={
+                    "legal_ball_delta": shortfall["missing_balls"],
+                    "runs_delta": 0, "wicket_delta": 0,
+                    "error_count": len(hard),
+                    "missing_balls": shortfall["missing_balls"],
+                },
+            )
+
     # A hard error in an innings that reconciles is still a contradiction: the
     # innings agrees with the scorecard on its total, so a disagreeing ball
     # count or wicket count cannot be explained by the counter being wrong.
@@ -856,16 +1002,6 @@ def assess_match(match: dict, scorecard_innings: Optional[List[dict]] = None) ->
                        for message in advisory_messages]
             return MatchAssessment("source_gap", errors=[], warnings=list(hard),
                                    issues=issues, source_gap=detail)
-
-    # A match with no deliveries at all is a scorecard-only record. The
-    # coverage gap is disclosed; the match is not dropped.
-    if _scorecard_only_match(match):
-        issues = [ValidationIssue("SCORECARD_ONLY_NO_COVERAGE", message) for message in hard]
-        return MatchAssessment(
-            "scorecard_only", errors=[], warnings=list(hard), issues=issues,
-            source_gap={"legal_ball_delta": 0, "runs_delta": 0, "wicket_delta": 0,
-                        "error_count": len(hard)},
-        )
 
     issues = [ValidationIssue(_source_gap_code(message) if _is_source_gap_message(message)
                               else "VALIDATION_FAILED", message) for message in hard]
@@ -887,6 +1023,10 @@ def _source_gap_code(message: str) -> str:
         return "TOTAL_EXTRAS_MISMATCH"
     if message.startswith("Unrecognized dismissal kind:"):
         return "UNRECOGNIZED_DISMISSAL_KIND"
+    if message.startswith("Source penalty component requires review"):
+        return "PENALTY_COMPONENT_MISMATCH"
+    if message.startswith("Source innings penalty adjustment mismatch"):
+        return "PENALTY_COMPONENT_MISMATCH"
     if message.startswith("Scorecard runs mismatch:"):
         return "SCORECARD_RUNS_MISMATCH"
     if message.startswith("Supplied source legal-ball coverage mismatch"):

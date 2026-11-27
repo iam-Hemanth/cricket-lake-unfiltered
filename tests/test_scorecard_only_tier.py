@@ -46,11 +46,11 @@ class ScorecardOnlyTierTests(unittest.TestCase):
         result = build_match("100", payload, {1: [ball()]}, References())
         self.assertNotEqual(result.tier, "scorecard_only")
 
-    def test_a_partly_covered_match_is_not_scorecard_only(self):
-        """One innings with deliveries means the record is not scorecard-only."""
+    def test_a_partly_covered_match_is_scorecard_only(self):
+        """One innings with deliveries, another without, is still partly missing."""
         payload = _scorecard_only_payload()
         result = build_match("100", payload, {1: [ball()]}, References())
-        self.assertNotEqual(result.tier, "scorecard_only")
+        self.assertEqual(result.tier, "scorecard_only")
 
     def test_a_match_without_innings_is_not_scorecard_only(self):
         payload = details()

@@ -45,7 +45,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from src import catalog_db, release_store, shard_store  # noqa: E402
 from src.builder import PARSER_VERSION, References, build_match  # noqa: E402
-from src.commentary import load_raw_match_payloads  # noqa: E402
+from src.commentary import load_raw_match_payloads, raw_payload_files  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -199,7 +199,7 @@ def run_worker(args: argparse.Namespace) -> int:
         # the migration rather than be fetched again later.
         staged_raw = raw_out / match_id
         staged_raw.mkdir(parents=True, exist_ok=True)
-        for file_path in sorted(match_dir.glob("*.json.gz")):
+        for file_path in raw_payload_files(match_dir):
             shutil.copy2(file_path, staged_raw / file_path.name)
         meta_path = match_dir / "meta.json"
         if meta_path.exists():
@@ -301,7 +301,7 @@ def run_merge(args: argparse.Namespace) -> int:
         for match_id, directory in chosen_raw.items():
             if shard_store.shard_id(match_id) != index:
                 continue
-            for file_path in sorted(Path(directory).glob("*.json.gz")):
+            for file_path in raw_payload_files(directory):
                 with gzip.open(file_path, "rb") as handle:
                     members[f"{match_id}/{file_path.name}"] = handle.read()
         if not members:
@@ -396,6 +396,12 @@ def run_merge(args: argparse.Namespace) -> int:
         )
     connection.commit()
 
+    # The published lake holds a few hundred matches that were never given a
+    # raw payload. They cannot be rebuilt, and they must not disappear: the
+    # plan keeps them as legacy_unbacked so that a later targeted fetch can
+    # give them a raw payload. Without this they would vanish from the lake.
+    preserved = _preserve_unbacked(args, connection, workdir, now)
+
     catalog_db.save_catalog_gz(connection, workdir / "lake_catalog.sqlite.gz")
 
     summary = {
@@ -403,12 +409,88 @@ def run_merge(args: argparse.Namespace) -> int:
         "built_matches": len(built_digests),
         "raw_shards": len(raw_written),
         "built_shards": len(built_written),
+        "legacy_unbacked": preserved,
         "catalog_rows": catalog_db.count_matches(connection),
     }
     logger.info("Merge complete: %s", json.dumps(summary))
     print(json.dumps(summary, indent=2))
     connection.close()
     return 0
+
+
+def _preserve_unbacked(
+    args: argparse.Namespace,
+    connection,
+    workdir: Path,
+    now: datetime,
+) -> int:
+    """Keep the published matches that have no raw payload behind them.
+
+    Their existing built JSON is carried into the built layer unchanged, so
+    the migration loses nothing. They are recorded as ``legacy_unbacked``,
+    which keeps them published while marking that a targeted fetch is needed
+    to give them a raw payload.
+    """
+    master_dir = workdir / "master"
+    master_dir.mkdir(parents=True, exist_ok=True)
+    master_tar = master_dir / "cricket_lake_unfiltered_master.tar.gz"
+    if not master_tar.exists():
+        try:
+            release_store.download_asset(
+                args.repo, MASTER_RELEASE, master_tar.name, master_dir
+            )
+        except Exception as exc:
+            logger.warning("Could not download the published master: %s", exc)
+            return 0
+
+    known = set(catalog_db.all_match_ids(connection))
+    preserved = 0
+    with tarfile.open(master_tar, "r|gz") as tar:
+        for member in tar:
+            if not member.isfile():
+                continue
+            name = Path(member.name).name
+            if not name.endswith(".json") or name == "lake_manifest.json":
+                continue
+            match_id = name[:-5]
+            if not match_id.isdigit() or match_id in known:
+                continue
+            handle = tar.extractfile(member)
+            if handle is None:
+                continue
+            payload = handle.read()
+            try:
+                match = json.loads(payload.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                continue
+            meta = match.get("meta") or {}
+            catalog_db.upsert_fetch_and_build(
+                connection, match_id,
+                raw_archive=None, raw_sha256=None,
+                built_archive=None,
+                built_sha256=None,
+                parser_version=meta.get("parser_version"),
+                schema_version=meta.get("schema_version"),
+                validation_tier=meta.get("validation_status") or "clean",
+                maturity_state="legacy_unbacked",
+                completeness_gaps=["missing_raw_payload"],
+                identity={
+                    "match_date": (meta.get("dates") or [None])[0],
+                    "format": meta.get("format"),
+                    "format_bucket": meta.get("format_bucket"),
+                    "competition": meta.get("competition"),
+                    "season": meta.get("season"),
+                    "gender": meta.get("gender"),
+                    "winner": (match.get("outcome") or {}).get("winner"),
+                    "result": (match.get("outcome") or {}).get("result"),
+                },
+                now_utc=now,
+            )
+            preserved += 1
+    if preserved:
+        logger.info("Preserved %s published matches that have no raw payload", preserved)
+    connection.commit()
+    return preserved
 
 
 def run_verify(args: argparse.Namespace) -> int:

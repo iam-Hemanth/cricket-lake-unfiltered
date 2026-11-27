@@ -83,6 +83,20 @@ def save_raw_payload(
         json.dump(meta, f, indent=2)
 
 
+def raw_payload_files(raw_match_dir: Path) -> List[Path]:
+    """The stored raw payloads of a match directory.
+
+    macOS writes AppleDouble sidecar files into an extracted archive, named
+    ``._<name>``. They are resource-fork metadata rather than data, and they
+    are not gzipped, so they are skipped here rather than failing to be
+    read wherever the raw files are gathered.
+    """
+    return sorted(
+        path for path in Path(raw_match_dir).glob("*.json.gz")
+        if not path.name.startswith("._")
+    )
+
+
 def bundle_sha256(raw_match_dir: Path) -> str:
     """Deterministic digest over the raw files of a match bundle.
 
@@ -92,7 +106,7 @@ def bundle_sha256(raw_match_dir: Path) -> str:
     catalog skip a rebuild.
     """
     digest = hashlib.sha256()
-    for path in sorted(raw_match_dir.glob("*.json.gz")):
+    for path in raw_payload_files(raw_match_dir):
         digest.update(path.name.encode("utf-8"))
         digest.update(b"\0")
         try:

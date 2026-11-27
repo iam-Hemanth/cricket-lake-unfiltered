@@ -102,6 +102,7 @@ def scan_and_consolidate(
     warning_matches = 0
     source_gap_matches = 0
     scorecard_only_matches = 0
+    coverage_gap_matches = 0
     invalid_matches = 0
 
     processed_mids: List[str] = []
@@ -133,7 +134,9 @@ def scan_and_consolidate(
         # It was assessed and deliberately retained, like a source-gap record,
         # so it is not re-validated here.
         is_scorecard_only = status == "scorecard_only"
-        validation_errors = [] if (is_quarantined or is_source_gap or is_scorecard_only) else validate_inventory_candidate(data)
+        is_coverage_gap = status == "coverage_gap"
+        validation_errors = [] if (is_quarantined or is_source_gap or is_scorecard_only
+                                   or is_coverage_gap) else validate_inventory_candidate(data)
         if validation_errors:
             invalid_matches += 1
             failed_matches_all[mid] = "; ".join(validation_errors[:5])
@@ -145,6 +148,8 @@ def scan_and_consolidate(
             source_gap_matches += 1
         elif is_scorecard_only:
             scorecard_only_matches += 1
+        elif is_coverage_gap:
+            coverage_gap_matches += 1
         meta=data['meta']
         if meta.get('schema_version')=='3.0.0':legacy_unverified_matches+=1
         try:
@@ -264,6 +269,7 @@ def scan_and_consolidate(
             "warning_matches": warning_matches,
             "source_gap_matches": source_gap_matches,
             "scorecard_only_matches": scorecard_only_matches,
+            "coverage_gap_matches": coverage_gap_matches,
             "invalid_matches": invalid_matches,
             "zero_delivery_matches": zero_delivery_matches,
             "legacy_unverified_matches":legacy_unverified_matches,
