@@ -227,6 +227,12 @@ def run_worker(args: argparse.Namespace) -> int:
         "matches": results,
     }, indent=2), encoding="utf-8")
 
+    # The extracted copy is only needed while the batch is being processed.
+    # Keeping it would hold three copies of every payload on disk, which the
+    # whole corpus does not fit into.
+    shutil.rmtree(extract_dir, ignore_errors=True)
+    archive.unlink(missing_ok=True)
+
     logger.info("%s: built %s matches, %s failed", asset, built, failed)
     print(json.dumps({"asset": asset, "built": built, "failed": failed}, indent=2))
     return 0
