@@ -260,6 +260,17 @@ def _newest_fetched_at(staged: Dict[str, List[Path]]) -> Dict[str, Path]:
     return chosen
 
 
+def _raw_digest(directory: Optional[Path]) -> Optional[str]:
+    """The digest of a match's stored scorecard."""
+    if directory is None:
+        return None
+    scorecard = Path(directory) / "scorecard.json.gz"
+    if not scorecard.exists():
+        return None
+    with gzip.open(scorecard, "rb") as handle:
+        return shard_store.member_digest(handle.read())
+
+
 def run_merge(args: argparse.Namespace) -> int:
     """Group the staged output into shards and write the catalog."""
     workdir = Path(args.workdir)
@@ -281,73 +292,98 @@ def run_merge(args: argparse.Namespace) -> int:
         staged_raw.setdefault(match_id, []).append(path)
     chosen_raw = _newest_fetched_at(staged_raw)
 
-    raw_members: Dict[int, Dict[str, bytes]] = {i: {} for i in range(shard_store.NUM_SHARDS)}
-    for match_id, directory in chosen_raw.items():
-        index = shard_store.shard_id(match_id)
-        for file_path in sorted(Path(directory).glob("*.json.gz")):
-            with gzip.open(file_path, "rb") as handle:
-                raw_members[index][f"{match_id}/{file_path.name}"] = handle.read()
-    logger.info("Seeding %s raw matches into %s shards", len(chosen_raw), shard_store.NUM_SHARDS)
-
+    # The shards are written one at a time. Holding the whole raw layer in
+    # memory would need several gigabytes, so each shard is gathered, written
+    # and released before the next one is started.
     raw_written = []
     for index in range(shard_store.NUM_SHARDS):
-        if not raw_members[index]:
+        members: Dict[str, bytes] = {}
+        for match_id, directory in chosen_raw.items():
+            if shard_store.shard_id(match_id) != index:
+                continue
+            for file_path in sorted(Path(directory).glob("*.json.gz")):
+                with gzip.open(file_path, "rb") as handle:
+                    members[f"{match_id}/{file_path.name}"] = handle.read()
+        if not members:
             continue
         name = shard_store.shard_name(shard_store.LAYER_RAW, index)
-        shard_store.write_pack(archives_dir / name, shard_store.LAYER_RAW, raw_members[index])
+        shard_store.write_pack(archives_dir / name, shard_store.LAYER_RAW, members)
         raw_written.append(name)
+        members.clear()
+    logger.info("Seeded %s raw matches into %s shards", len(chosen_raw), len(raw_written))
 
     # -- the built layer -------------------------------------------------
-    built_members: Dict[int, Dict[str, bytes]] = {i: {} for i in range(shard_store.NUM_SHARDS)}
-    built_payloads: Dict[str, bytes] = {}
-    for path in sorted(built_stage.glob("*.json")):
-        match_id = path.stem
-        payload = path.read_bytes()
-        built_payloads[match_id] = payload
-        index = shard_store.shard_id(match_id)
-        built_members[index][f"{match_id}.json"] = payload
-    logger.info("Seeding %s built matches into %s shards", len(built_payloads), shard_store.NUM_SHARDS)
-
+    # Only the digest and the metadata are kept, not the match bodies. The
+    # built layer is several gigabytes, and holding it in memory alongside
+    # the shards would not fit.
+    built_digests: Dict[str, str] = {}
+    built_summary: Dict[str, dict] = {}
     built_written = []
     for index in range(shard_store.NUM_SHARDS):
-        if not built_members[index]:
-            continue
-        name = shard_store.shard_name(shard_store.LAYER_BUILT, index)
-        shard_store.write_pack(archives_dir / name, shard_store.LAYER_BUILT, built_members[index])
-        built_written.append(name)
-
-    # -- the catalog -----------------------------------------------------
-    now = datetime.now(timezone.utc)
-    for match_id, payload in built_payloads.items():
-        try:
-            match = json.loads(payload.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            continue
-        meta = match.get("meta") or {}
-        tier = meta.get("validation_status") or "clean"
-        catalog_db.upsert_fetch_and_build(
-            connection, match_id,
-            raw_archive=shard_store.shard_name(shard_store.LAYER_RAW, shard_store.shard_id(match_id)),
-            raw_sha256=shard_store.member_digest(
-                raw_members[shard_store.shard_id(match_id)].get(f"{match_id}/scorecard.json.gz", b"")
-            ) if f"{match_id}/scorecard.json.gz" in raw_members[shard_store.shard_id(match_id)] else None,
-            raw_fetched_at=_fetched_at(chosen_raw[match_id]) if match_id in chosen_raw else now.isoformat(),
-            built_archive=shard_store.shard_name(shard_store.LAYER_BUILT, shard_store.shard_id(match_id)),
-            built_sha256=shard_store.member_digest(payload),
-            parser_version=meta.get("parser_version") or PARSER_VERSION,
-            schema_version=meta.get("schema_version"),
-            validation_tier=tier,
-            maturity_state="settled",
-            completeness_gaps=[],
-            identity={
+        members: Dict[str, bytes] = {}
+        for path in sorted(built_stage.glob("*.json")):
+            match_id = path.stem
+            if shard_store.shard_id(match_id) != index:
+                continue
+            payload = path.read_bytes()
+            members[f"{match_id}.json"] = payload
+            built_digests[match_id] = shard_store.member_digest(payload)
+            try:
+                match = json.loads(payload.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                continue
+            meta = match.get("meta") or {}
+            outcome = match.get("outcome") or {}
+            built_summary[match_id] = {
+                "tier": meta.get("validation_status") or "clean",
+                "parser_version": meta.get("parser_version") or PARSER_VERSION,
+                "schema_version": meta.get("schema_version"),
                 "match_date": (meta.get("dates") or [None])[0],
                 "format": meta.get("format"),
                 "format_bucket": meta.get("format_bucket"),
                 "competition": meta.get("competition"),
                 "season": meta.get("season"),
                 "gender": meta.get("gender"),
-                "winner": (match.get("outcome") or {}).get("winner"),
-                "result": (match.get("outcome") or {}).get("result"),
+                "winner": outcome.get("winner"),
+                "result": outcome.get("result"),
+                "total_balls": sum(
+                    1 for inn in match.get("innings") or []
+                    for over in inn.get("overs") or []
+                    for _ in over.get("deliveries") or []
+                ),
+            }
+        if not members:
+            continue
+        name = shard_store.shard_name(shard_store.LAYER_BUILT, index)
+        shard_store.write_pack(archives_dir / name, shard_store.LAYER_BUILT, members)
+        built_written.append(name)
+        members.clear()
+    logger.info("Seeded %s built matches into %s shards", len(built_digests), len(built_written))
+
+    # -- the catalog -----------------------------------------------------
+    now = datetime.now(timezone.utc)
+    for match_id, summary in built_summary.items():
+        catalog_db.upsert_fetch_and_build(
+            connection, match_id,
+            raw_archive=shard_store.shard_name(shard_store.LAYER_RAW, shard_store.shard_id(match_id)),
+            raw_sha256=_raw_digest(chosen_raw.get(match_id)),
+            raw_fetched_at=_fetched_at(chosen_raw[match_id]) if match_id in chosen_raw else now.isoformat(),
+            built_archive=shard_store.shard_name(shard_store.LAYER_BUILT, shard_store.shard_id(match_id)),
+            built_sha256=built_digests[match_id],
+            parser_version=summary["parser_version"],
+            schema_version=summary["schema_version"],
+            validation_tier=summary["tier"],
+            maturity_state="settled",
+            completeness_gaps=[],
+            identity={
+                "match_date": summary["match_date"],
+                "format": summary["format"],
+                "format_bucket": summary["format_bucket"],
+                "competition": summary["competition"],
+                "season": summary["season"],
+                "gender": summary["gender"],
+                "winner": summary["winner"],
+                "result": summary["result"],
             },
             index_meta={
                 "total_balls": sum(
@@ -364,7 +400,7 @@ def run_merge(args: argparse.Namespace) -> int:
 
     summary = {
         "raw_matches": len(chosen_raw),
-        "built_matches": len(built_payloads),
+        "built_matches": len(built_digests),
         "raw_shards": len(raw_written),
         "built_shards": len(built_written),
         "catalog_rows": catalog_db.count_matches(connection),
