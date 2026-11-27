@@ -367,8 +367,19 @@ def write_built_pack(
     out_path: str | Path,
     built_matches: Dict[str, bytes],
 ) -> Tuple[Path, Dict[str, str]]:
-    """Pack built match JSONs into one archive, returning their digests."""
-    members = {f"{match_id}.json": payload for match_id, payload in built_matches.items()}
+    """Pack built match JSONs into one archive, returning their digests.
+
+    The keys are match ids. A key that already carries the ``.json``
+    extension is accepted as well, so a caller cannot end up with a member
+    named ``<id>.json.json`` and a catalog row that points at nothing.
+    """
+    members: Dict[str, bytes] = {}
+    digests: Dict[str, str] = {}
+    for match_id, payload in built_matches.items():
+        stem = str(match_id)
+        if stem.endswith(".json"):
+            stem = stem[:-5]
+        members[f"{stem}.json"] = payload
+        digests[stem] = member_digest(payload)
     path = write_pack(out_path, LAYER_BUILT, members)
-    digests = {match_id: member_digest(payload) for match_id, payload in built_matches.items()}
     return path, digests

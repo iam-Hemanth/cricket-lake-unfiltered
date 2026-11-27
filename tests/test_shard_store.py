@@ -64,6 +64,16 @@ class ShardStoreTests(unittest.TestCase):
         self.assertIn("100", digests)
         self.assertEqual(len(digests["100"]), 64)
 
+    def test_a_built_pack_accepts_an_id_with_or_without_the_extension(self):
+        """A key that already ends in .json must not become .json.json."""
+        path, digests = shard_store.write_built_pack(
+            self.archives / "built_pack_1.tar.gz",
+            {"100": b"a", "200.json": b"b"},
+        )
+        members = shard_store.read_pack(path)
+        self.assertEqual(sorted(members), ["100.json", "200.json"])
+        self.assertEqual(sorted(digests), ["100", "200"])
+
     # -- materializing ----------------------------------------------------
 
     def _seed_raw(self, match_id, payload, archive="raw_pack_1.tar.gz"):
