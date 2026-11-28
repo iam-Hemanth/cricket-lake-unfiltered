@@ -26,7 +26,7 @@ EXPORT_FIELDS = [
     "venue_country", "total_balls", "total_runs", "total_wickets",
     "wagon_wheel_balls", "pitch_line_balls", "shot_type_balls", "validation_status",
     "level", "format_family", "year", "competition_id", "competition_name",
-    "competition_type", "team_ids", "published_at",
+    "competition_type", "team_ids", "published_at", "updated_at",
     "match_stage", "match_number", "match_group", "match_title",
 ]
 
@@ -248,7 +248,13 @@ def index_rows(path: Path) -> list[dict]:
         return list(csv.DictReader(f))
 
 
-def enrich(row: dict, comps: CompetitionRegistry, teams: TeamRegistry, published_at: str | None) -> dict:
+def enrich(
+    row: dict,
+    comps: CompetitionRegistry,
+    teams: TeamRegistry,
+    published_at: str | None,
+    updated_at: str | None = None,
+) -> dict:
     row = dict(row)
     comp = comps.match(row.get("competition"))
     team_names = [row.get("team1") or "", row.get("team2") or ""]
@@ -262,6 +268,7 @@ def enrich(row: dict, comps: CompetitionRegistry, teams: TeamRegistry, published
         "competition_type": comp["type"],
         "team_ids": "|".join(team_ids),
         "published_at": published_at or "",
+        "updated_at": updated_at or published_at or "",
     })
     return row
 

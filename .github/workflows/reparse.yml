@@ -38,6 +38,8 @@ jobs:
   reparse:
     name: Rebuild
     runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.reparse.outputs.has_changes }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -46,6 +48,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Rebuild the matches
+        id: reparse
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MATCH_IDS: ${{ inputs.match_ids }}
@@ -56,34 +59,30 @@ jobs:
           EXTRA=""
           if [ -n "$FORCE_ALL" ]; then EXTRA="$EXTRA --force"; fi
           if [ -n "$LIMIT" ]; then EXTRA="$EXTRA --limit $LIMIT"; fi
-          if [ -n "$DRY_RUN" ]; then EXTRA="$EXTRA --dry-run"; fi
+          if [ -n "$DRY_RUN" ]; then
+            EXTRA="$EXTRA --dry-run"
+          else
+            EXTRA="$EXTRA --upload"
+          fi
           python scripts/pipeline_reparse.py \
             --workdir reparse_work \
+            --repo ${{ github.repository }} \
             --match-ids "$MATCH_IDS" \
             $EXTRA \
             | tee reparse_summary.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          summary = json.load(open("reparse_summary.json"))
+          print(f"has_changes={'true' if summary.get('has_changes') else 'false'}")
+          PY
 
-  publish:
-    name: Publish
+  dispatch_publish:
+    name: Publish the rebuilt snapshot
     needs: reparse
+    if: ${{ needs.reparse.outputs.has_changes == 'true' && !inputs.dry_run }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      - name: Download the rebuilt matches
-        uses: actions/download-artifact@v4
-        with:
-          path: reparse_work
-      - name: Publish the rebuilt snapshot
+      - name: Dispatch the publish workflow
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python scripts/pipeline_publish.py \
-            --workdir publish_work \
-            --catalog reparse_work/lake_catalog.sqlite.gz \
-            --out published \
-            | tee publish_summary.json
+        run: gh workflow run publish.yml --repo ${{ github.repository }}

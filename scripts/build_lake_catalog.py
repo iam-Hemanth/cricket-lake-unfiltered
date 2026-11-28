@@ -53,8 +53,8 @@ def generate_catalog(matches_dir: Path, output_dir: Path, archive_prefix: str = 
             continue
 
         status = (d.get("meta") or {}).get("validation_status")
-        is_source_gap = status == "source_gap"
-        if not is_source_gap:
+        admitted_gap = status in ("source_gap", "scorecard_only", "coverage_gap")
+        if not admitted_gap:
             errors=validate_inventory_candidate(d)
             if errors:
                 print(f'Rejected catalog candidate {p.stem}: {errors[0]}')
@@ -113,7 +113,7 @@ def generate_catalog(matches_dir: Path, output_dir: Path, archive_prefix: str = 
         for inn in inns:
             total_runs += inn.get('innings_penalty_runs',0)
             deliveries=[b for ov in inn.get('overs') or [] for b in ov.get('deliveries') or []]
-            total_wkts += _wicket_count(deliveries, allow_unknown=is_source_gap)+source_only_timed_out(deliveries,inn.get('source_scorecard') or {})
+            total_wkts += _wicket_count(deliveries, allow_unknown=admitted_gap)+source_only_timed_out(deliveries,inn.get('source_scorecard') or {})
             for ov in (inn.get("overs") or []):
                 for b in (ov.get("deliveries") or []):
                     total_balls += 1

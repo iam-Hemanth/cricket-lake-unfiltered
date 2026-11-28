@@ -3,9 +3,9 @@
 scripts/pipeline_publish.py
 Turn the catalog and the built layer into the published lake.
 
-This stage reads. It takes the built matches the catalog names, verifies
-their digests, and writes the published snapshot: the master archive, the
-match index, the download slices and the dated calendar.
+This stage reads the built layer. It takes the built matches the catalog
+names, verifies their digests, and writes the published snapshot: the master
+archive, the match index, the download slices and the dated calendar.
 
 Nothing here changes a match. The published snapshot is a copy of what the
 builder produced, so a published match and a built match are the same bytes.
@@ -19,6 +19,8 @@ import csv
 import json
 import logging
 import sys
+import tarfile
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -27,159 +29,46 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from src import catalog_db, release_store, shard_store  # noqa: E402
-from src.validator import assess_match  # noqa: E402
+from src.catalog_fields import INDEX_FIELDS, extract_catalog_metadata  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
+    handlers=[logging.StreamHandler(sys.stderr)],
 )
 logger = logging.getLogger("publish")
 
-#: The fields the published match index carries.
-INDEX_FIELDS = [
-    "match_id", "date", "format", "format_bucket", "competition", "season",
-    "team1", "team2", "winner", "result", "toss_winner", "toss_decision",
-    "venue", "city", "venue_country", "gender", "schema_version",
-    "validation_status", "parser_version", "total_balls", "total_runs",
-    "total_wickets", "wagon_wheel_balls", "pitch_line_balls", "shot_type_balls",
-    "match_stage", "match_number", "match_group", "match_title",
-]
+MASTER_ARCHIVE = "cricket_lake_unfiltered_master.tar.gz"
+MASTER_ZIP = "cricket_lake_unfiltered_master.zip"
+PUBLISHED_ASSETS = (
+    MASTER_ARCHIVE, MASTER_ZIP, "README.txt", "matches_index.csv", "lake_manifest.json",
+)
+
+PUBLISHABLE_SQL = (
+    "SELECT match_id, built_archive, built_sha256 FROM matches"
+    " WHERE validation_tier IN ('clean', 'warning', 'source_gap',"
+    " 'scorecard_only', 'coverage_gap')"
+)
 
 
 def _index_row(match: dict) -> Dict[str, Any]:
-    """One row of the published match index."""
-    meta = match.get("meta") or {}
-    outcome = match.get("outcome") or {}
-    toss = match.get("toss") or {}
-    dates = meta.get("dates") or []
-    total_balls = 0
-    total_runs = 0
-    total_wickets = 0
-    wagon = pitch = shot = 0
-    for innings in match.get("innings") or []:
-        for over in innings.get("overs") or []:
-            for delivery in over.get("deliveries") or []:
-                total_balls += 1
-                total_runs += delivery.get("runs", {}).get("total", 0)
-                total_wickets += len(delivery.get("wickets") or [])
-                tactical = delivery.get("tactical") or {}
-                if tactical.get("wagon_coords") is not None:
-                    wagon += 1
-                if tactical.get("pitch_line") is not None:
-                    pitch += 1
-                if tactical.get("shot_type") is not None:
-                    shot += 1
-    return {
-        "match_id": str(match.get("match_id") or ""),
-        "date": dates[0] if dates else "",
-        "format": meta.get("format") or "",
-        "format_bucket": meta.get("format_bucket") or "",
-        "competition": meta.get("competition") or "",
-        "season": str(meta.get("season") or ""),
-        "team1": "",
-        "team2": "",
-        "winner": outcome.get("winner") or "",
-        "result": outcome.get("result") or "",
-        "toss_winner": toss.get("winner") or "",
-        "toss_decision": toss.get("decision") or "",
-        "venue": meta.get("venue") or "",
-        "city": meta.get("city") or "",
-        "venue_country": meta.get("venue_country") or "",
-        "gender": meta.get("gender") or "",
-        "schema_version": meta.get("schema_version") or "",
-        "validation_status": meta.get("validation_status") or "",
-        "parser_version": meta.get("parser_version") or "",
-        "total_balls": total_balls,
-        "total_runs": total_runs,
-        "total_wickets": total_wickets,
-        "wagon_wheel_balls": wagon,
-        "pitch_line_balls": pitch,
-        "shot_type_balls": shot,
-        "match_stage": meta.get("match_stage") or "",
-        "match_number": meta.get("match_number") or "",
-        "match_group": meta.get("match_group") or "",
-        "match_title": meta.get("match_title") or "",
-    }
+    """One row of the published match index, from the match itself."""
+    return extract_catalog_metadata(match)[1]
 
 
-def _teams(match: dict) -> tuple[str, str]:
-    """The two teams, taken from the playing XIs."""
-    xi = match.get("playing_xi") or {}
-    names = [name for name in xi if not name.startswith("_") and isinstance(xi[name], list)]
-    names.sort()
-    return (names[0] if names else "", names[1] if len(names) > 1 else "")
+def write_index(
+    matches_dir: Path,
+    out_path: Path,
+    catalog_rows: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> int:
+    """Write the published match index.
 
-
-def materialize_published(
-    connection,
-    archive_dir: Path,
-    dest_dir: Path,
-    verify: bool = True,
-) -> Dict[str, Any]:
-    """Write the published matches, using only what the catalog names.
-
-    A match is published when its tier admits it. Its bytes come from the
-    archive the catalog names, and the digest is checked, so a corrupted
-    archive cannot be published.
+    The catalog row wins where it has a value, because it carries the
+    first-published and built-at timestamps no match JSON can know. The match
+    JSON fills any field the catalog row does not have, so an older migrated
+    row still publishes a complete index.
     """
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    publishable = catalog_db.select_publishable(connection)
-
-    # Group by the archive that holds each match, so each archive is opened
-    # once rather than once per match.
-    targets: Dict[str, List[str]] = {}
-    for row in connection.execute(
-        "SELECT match_id, built_archive FROM matches"
-        " WHERE validation_tier IN ('clean', 'warning', 'source_gap', 'scorecard_only', 'coverage_gap')"
-        "   AND built_archive IS NOT NULL ORDER BY match_id"
-    ):
-        targets.setdefault(str(row["built_archive"]), []).append(str(row["match_id"]))
-
-    written: List[str] = []
-    missing: List[str] = []
-    mismatched: List[str] = []
-    digests = {
-        str(row["match_id"]): row["built_sha256"]
-        for row in connection.execute(
-            "SELECT match_id, built_sha256 FROM matches"
-            " WHERE validation_tier IN ('clean', 'warning', 'source_gap', 'scorecard_only', 'coverage_gap')"
-        )
-    }
-
-    for archive_name, match_ids in sorted(targets.items()):
-        archive_path = archive_dir / archive_name
-        if not archive_path.exists():
-            missing.extend(match_ids)
-            continue
-        members = shard_store.read_pack(archive_path)
-        for match_id in match_ids:
-            member_name = f"{match_id}.json"
-            payload = members.get(member_name)
-            if payload is None:
-                missing.append(match_id)
-                continue
-            expected = digests.get(match_id)
-            if verify and expected and shard_store.member_digest(payload) != expected:
-                mismatched.append(match_id)
-                continue
-            (dest_dir / member_name).write_bytes(payload)
-            written.append(match_id)
-
-    logger.info(
-        "Published %s matches (%s missing, %s mismatched)", len(written), len(missing), len(mismatched)
-    )
-    return {
-        "published": written,
-        "missing": missing,
-        "mismatched": mismatched,
-        "publishable_total": len(publishable),
-    }
-
-
-def write_index(matches_dir: Path, out_path: Path) -> int:
-    """Write the published match index."""
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    catalog_rows = catalog_rows or {}
     rows: List[Dict[str, Any]] = []
     for path in sorted(matches_dir.glob("*.json")):
         if path.name in ("lake_manifest.json", "manifest.json", "failed_matches.json"):
@@ -189,14 +78,18 @@ def write_index(matches_dir: Path, out_path: Path) -> int:
         except (OSError, json.JSONDecodeError):
             logger.warning("Skipping unreadable match file %s", path.name)
             continue
-        row = _index_row(match)
-        team1, team2 = _teams(match)
-        row["team1"] = team1
-        row["team2"] = team2
+        match_id = str(match.get("match_id") or path.stem)
+        derived = _index_row(match)
+        row = dict(catalog_rows.get(match_id) or {})
+        for key, value in derived.items():
+            if row.get(key) in (None, ""):
+                row[key] = value
+        row["match_id"] = match_id
+        row["filename"] = f"{match_id}.json"
         rows.append(row)
     rows.sort(key=lambda r: (r.get("date") or "9999", r["match_id"]))
     with open(out_path, "w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=INDEX_FIELDS)
+        writer = csv.DictWriter(handle, fieldnames=INDEX_FIELDS, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
     logger.info("Wrote the match index with %s rows", len(rows))
@@ -238,11 +131,146 @@ def write_manifest(matches_dir: Path, out_path: Path, catalog_summary: Dict[str,
         "date_range": {"earliest": earliest, "latest": latest},
         "totals": {"deliveries": total_balls, "runs": total_runs, "wickets": total_wickets},
         "validation_tiers": tiers,
+        "coverage": {
+            "warning_matches": tiers.get("warning", 0),
+            "source_gap_matches": tiers.get("source_gap", 0),
+            "scorecard_only_matches": tiers.get("scorecard_only", 0),
+            "coverage_gap_matches": tiers.get("coverage_gap", 0),
+            "quarantined_matches": 0,
+        },
         "catalog": catalog_summary,
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest
+
+
+def write_readme(out_path: Path, manifest: Dict[str, Any]) -> None:
+    """Write the README that ships with the master archive."""
+    tiers = ", ".join(
+        f"{name} {count:,}" for name, count in sorted(manifest["validation_tiers"].items())
+    ) or "clean"
+    date_range = manifest.get("date_range") or {}
+    out_path.write_text(
+        "\n".join([
+            "Cricket Lake — published snapshot",
+            "=" * 40,
+            "",
+            f"Matches        : {manifest['total_matches']:,}",
+            f"Date range     : {date_range.get('earliest')} to {date_range.get('latest')}",
+            f"Deliveries     : {manifest['totals']['deliveries']:,}",
+            f"Runs           : {manifest['totals']['runs']:,}",
+            f"Wickets        : {manifest['totals']['wickets']:,}",
+            f"Validation     : {tiers}",
+            "",
+            "CONTENTS",
+            "  <match_id>.json   Ball-by-ball Match JSON v3",
+            "  matches_index.csv One row per match",
+            "  lake_manifest.json Counts and coverage",
+            "",
+            "Every match is the bytes the lake's builder produced. A match whose",
+            "validation_status is not clean carries its disclosed caveats in",
+            "meta.validation_warnings.",
+            "",
+            "Source: ESPNcricinfo match pages via cricket-lake-unfiltered.",
+            "",
+        ]),
+        encoding="utf-8",
+    )
+
+
+def write_archives(matches_dir: Path, out_dir: Path) -> None:
+    """Write the master tar.gz and zip from the published snapshot."""
+    members = [
+        path for path in sorted(matches_dir.glob("*.json"))
+        if path.name not in ("lake_manifest.json", "manifest.json")
+    ]
+    extras = [
+        out_dir / "README.txt",
+        out_dir / "matches_index.csv",
+        out_dir / "lake_manifest.json",
+    ]
+    with tarfile.open(out_dir / MASTER_ARCHIVE, "w:gz") as archive:
+        for path in extras:
+            if path.exists():
+                archive.add(path, arcname=path.name)
+        for path in members:
+            archive.add(path, arcname=path.name)
+    with zipfile.ZipFile(out_dir / MASTER_ZIP, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in extras:
+            if path.exists():
+                archive.write(path, arcname=path.name)
+        for path in members:
+            archive.write(path, arcname=path.name)
+
+
+def materialize_published(
+    connection,
+    archive_dir: Path,
+    dest_dir: Path,
+    verify: bool = True,
+) -> Dict[str, Any]:
+    """Write the published matches, using only what the catalog names.
+
+    A match is published when its tier admits it. Its bytes come from the
+    archive the catalog names, and the digest is checked, so a corrupted
+    archive cannot be published. Both shards and packs are read: an
+    incremental ingest writes a pack until the next compaction folds it in.
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for stale in dest_dir.glob("*.json"):
+        stale.unlink()
+    publishable = catalog_db.select_publishable(connection)
+
+    targets: Dict[str, List[str]] = {}
+    digests: Dict[str, Optional[str]] = {}
+    for row in connection.execute(PUBLISHABLE_SQL + " ORDER BY match_id"):
+        match_id = str(row["match_id"])
+        digests[match_id] = row["built_sha256"]
+        if row["built_archive"] is None:
+            continue
+        targets.setdefault(str(row["built_archive"]), []).append(match_id)
+
+    written: List[str] = []
+    missing: List[str] = []
+    mismatched: List[str] = []
+
+    for archive_name, match_ids in sorted(targets.items()):
+        archive_path = archive_dir / archive_name
+        if not archive_path.exists():
+            missing.extend(match_ids)
+            continue
+        members = shard_store.read_pack(archive_path)
+        for match_id in match_ids:
+            member_name = f"{match_id}.json"
+            payload = members.get(member_name)
+            if payload is None:
+                missing.append(match_id)
+                continue
+            expected = digests.get(match_id)
+            if verify and expected and shard_store.member_digest(payload) != expected:
+                mismatched.append(match_id)
+                continue
+            (dest_dir / member_name).write_bytes(payload)
+            written.append(match_id)
+
+    # A publishable row without a built archive is missing too, not silently
+    # absent: the published lake must lose no match.
+    missing.extend(
+        str(row["match_id"]) for row in connection.execute(
+            PUBLISHABLE_SQL + " AND built_archive IS NULL ORDER BY match_id"
+        )
+    )
+
+    logger.info(
+        "Published %s matches (%s missing, %s mismatched)", len(written), len(missing), len(mismatched)
+    )
+    return {
+        "published": written,
+        "missing": missing,
+        "mismatched": mismatched,
+        "publishable_total": len(publishable),
+    }
 
 
 def main() -> int:
@@ -277,7 +305,8 @@ def main() -> int:
     if not args.skip_download:
         for row in connection.execute(
             "SELECT DISTINCT built_archive AS archive FROM matches"
-            " WHERE built_archive IS NOT NULL AND built_archive LIKE 'built_shard_%'"
+            " WHERE validation_tier IN ('clean', 'warning', 'source_gap',"
+            " 'scorecard_only', 'coverage_gap') AND built_archive IS NOT NULL"
         ):
             name = str(row["archive"])
             target = archive_dir / name
@@ -291,10 +320,35 @@ def main() -> int:
 
     matches_dir = out_dir / "matches"
     outcome = materialize_published(connection, archive_dir, matches_dir)
+    if outcome["missing"] or outcome["mismatched"]:
+        print(json.dumps({
+            "published": len(outcome["published"]),
+            "missing": outcome["missing"][:50],
+            "mismatched": outcome["mismatched"][:50],
+        }, indent=2))
+        raise SystemExit(
+            "Refusing to publish: "
+            f"{len(outcome['missing'])} missing and {len(outcome['mismatched'])} "
+            "mismatched built matches. The catalog names bytes the archives do not hold."
+        )
 
     summary = catalog_db.summary(connection)
-    index_rows = write_index(matches_dir, out_dir / "matches_index.csv")
+    published_ids = set(outcome["published"])
+    catalog_rows = {
+        str(row["match_id"]): row
+        for row in catalog_db.export_matches_index_rows(connection)
+        if str(row["match_id"]) in published_ids
+    }
+    index_rows = write_index(matches_dir, out_dir / "matches_index.csv", catalog_rows)
     manifest = write_manifest(matches_dir, out_dir / "lake_manifest.json", summary)
+    write_readme(out_dir / "README.txt", manifest)
+    write_archives(matches_dir, out_dir)
+
+    if args.upload:
+        for name in PUBLISHED_ASSETS:
+            release_store.upload_asset(
+                args.repo, release_store.RELEASE_PUBLISHED, out_dir / name
+            )
 
     logger.info(
         "Published snapshot: %s matches, %s index rows",
@@ -305,6 +359,7 @@ def main() -> int:
         "missing": len(outcome["missing"]),
         "mismatched": len(outcome["mismatched"]),
         "index_rows": index_rows,
+        "uploaded": bool(args.upload),
         "output": str(out_dir),
     }, indent=2))
     connection.close()

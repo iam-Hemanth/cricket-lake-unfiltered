@@ -158,6 +158,44 @@ def _next_refresh_at(attempts: int, now_utc: datetime) -> Optional[str]:
     return (now_utc + timedelta(hours=hours)).isoformat()
 
 
+def retry_schedule(refresh_attempts: int, now_utc: Optional[datetime] = None) -> tuple[str, Optional[str]]:
+    """The maturity state and next attempt time after a failed fetch.
+
+    A fetch failure says nothing about whether the stored payload is still
+    good, so it never changes a published tier. It only decides when the
+    match is tried again, until the backoff schedule is exhausted.
+    """
+    if now_utc is None:
+        now_utc = datetime.now(timezone.utc)
+    if refresh_attempts >= MAX_REFRESH_ATTEMPTS:
+        return "settled_incomplete", None
+    return "provisional", _next_refresh_at(refresh_attempts, now_utc)
+
+
+def failure_maturity(
+    raw_details: Optional[dict],
+    refresh_attempts: int,
+    now_utc: Optional[datetime] = None,
+) -> tuple[str, Optional[str]]:
+    """The maturity state and next attempt time after a build failure.
+
+    The raw payload was stored, so the match is not lost; it stays
+    provisional while it is inside the maturity window and the retry budget,
+    and settles incomplete afterwards, exactly like a completeness gap.
+    """
+    if now_utc is None:
+        now_utc = datetime.now(timezone.utc)
+    if now_utc.tzinfo is None:
+        now_utc = now_utc.replace(tzinfo=timezone.utc)
+    start = str(((raw_details or {}).get("match") or {}).get("startDate") or "")
+    match_date = start.split("T")[0] or None
+    age_days = _age_days(match_date, now_utc)
+    within_window = age_days is not None and age_days <= MATURITY_WINDOW_DAYS
+    if within_window and refresh_attempts < MAX_REFRESH_ATTEMPTS:
+        return "provisional", _next_refresh_at(refresh_attempts, now_utc)
+    return "settled_incomplete", None
+
+
 def evaluate_completeness(
     raw_details: dict,
     match_v3: Optional[dict],

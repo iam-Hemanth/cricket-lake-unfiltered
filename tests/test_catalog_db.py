@@ -138,6 +138,151 @@ class CatalogDbTests(unittest.TestCase):
         self.assertEqual(row["raw_archive"], "raw_pack_1.tar.gz")
         self.assertEqual(row["raw_sha256"], "a" * 64)
 
+    # -- failure recording ------------------------------------------------
+
+    def test_a_transient_fetch_never_demotes_a_publishable_match(self):
+        catalog_db.upsert_fetch_and_build(
+            self.connection, "100",
+            raw_archive="raw_pack_1.tar.gz", raw_sha256="a" * 64,
+            built_archive="built_pack_1.tar.gz", built_sha256="b" * 64,
+            parser_version=PARSER_VERSION, validation_tier="clean",
+            maturity_state="provisional", now_utc=NOW,
+        )
+        catalog_db.record_fetch_failure(
+            self.connection, "100",
+            failure_kind="transient_fetch", error="HTTP 503",
+            next_refresh_at=(NOW + timedelta(hours=12)).isoformat(),
+            now_utc=NOW,
+        )
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertEqual(row["validation_tier"], "clean")
+        self.assertEqual(row["built_archive"], "built_pack_1.tar.gz")
+        self.assertEqual(row["built_sha256"], "b" * 64)
+        self.assertEqual(row["raw_archive"], "raw_pack_1.tar.gz")
+        self.assertEqual(row["raw_sha256"], "a" * 64)
+        self.assertEqual(row["fetch_attempts"], 2)
+        self.assertEqual(row["last_failure_kind"], "transient_fetch")
+
+    def test_a_transient_fetch_never_demotes_a_legacy_unbacked_match(self):
+        self._seed(
+            "100", validation_tier="clean", maturity_state="legacy_unbacked",
+            built_archive="built_shard_00.tar.gz", built_sha256="b" * 64,
+        )
+        catalog_db.record_fetch_failure(
+            self.connection, "100",
+            failure_kind="transient_fetch", error="HTTP 404",
+            next_refresh_at=(NOW + timedelta(hours=12)).isoformat(),
+            now_utc=NOW,
+        )
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertEqual(row["validation_tier"], "clean")
+        self.assertEqual(row["maturity_state"], "legacy_unbacked")
+        self.assertEqual(row["built_archive"], "built_shard_00.tar.gz")
+
+    def test_a_missing_match_failure_is_created_as_provisional(self):
+        catalog_db.record_fetch_failure(
+            self.connection, "999",
+            failure_kind="transient_fetch", error="HTTP 500",
+            next_refresh_at=(NOW + timedelta(hours=12)).isoformat(),
+            now_utc=NOW,
+        )
+        row = catalog_db.get_match(self.connection, "999")
+        self.assertEqual(row["validation_tier"], "failed")
+        self.assertEqual(row["maturity_state"], "provisional")
+        self.assertEqual(row["raw_available"], 0)
+        self.assertEqual(row["fetch_attempts"], 1)
+
+    # -- content timestamps ----------------------------------------------
+
+    def test_a_failed_build_does_not_stamp_a_publication_time(self):
+        catalog_db.upsert_fetch_and_build(
+            self.connection, "100",
+            raw_archive="raw_pack_1.tar.gz", raw_sha256="a" * 64,
+            built_archive=None, built_sha256=None,
+            validation_tier="failed", maturity_state="provisional",
+            now_utc=NOW,
+        )
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertIsNone(row["first_published_at"])
+        self.assertIsNone(row["built_at"])
+
+    def test_a_publishable_build_stamps_both_content_times(self):
+        catalog_db.upsert_fetch_and_build(
+            self.connection, "100",
+            raw_archive="raw_pack_1.tar.gz", raw_sha256="a" * 64,
+            built_archive="built_pack_1.tar.gz", built_sha256="b" * 64,
+            validation_tier="clean", maturity_state="provisional",
+            now_utc=NOW,
+        )
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertIsNotNone(row["first_published_at"])
+        self.assertIsNotNone(row["built_at"])
+
+    def test_an_unchanged_probe_moves_neither_content_time_nor_updated_at(self):
+        catalog_db.upsert_fetch_and_build(
+            self.connection, "100",
+            raw_archive="raw_pack_1.tar.gz", raw_sha256="a" * 64,
+            built_archive="built_pack_1.tar.gz", built_sha256="b" * 64,
+            parser_version=PARSER_VERSION, validation_tier="clean",
+            maturity_state="provisional", now_utc=NOW,
+        )
+        before = catalog_db.get_match(self.connection, "100")
+        later = NOW + timedelta(hours=12)
+        outcome = catalog_db.upsert_fetch_and_build(
+            self.connection, "100",
+            raw_archive="raw_pack_2.tar.gz", raw_sha256="a" * 64,
+            built_archive="built_pack_2.tar.gz", built_sha256="c" * 64,
+            parser_version=PARSER_VERSION, validation_tier="clean",
+            maturity_state="settled", now_utc=later,
+        )
+        self.assertFalse(outcome["rebuild_required"])
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertEqual(row["raw_archive"], "raw_pack_1.tar.gz")
+        self.assertEqual(row["updated_at"], before["updated_at"])
+        self.assertEqual(row["first_published_at"], before["first_published_at"])
+        self.assertEqual(row["built_at"], before["built_at"])
+        self.assertEqual(row["maturity_state"], "settled")
+
+    def test_a_changed_built_digest_moves_built_at(self):
+        catalog_db.upsert_fetch_and_build(
+            self.connection, "100",
+            raw_archive="raw_pack_1.tar.gz", raw_sha256="a" * 64,
+            built_archive="built_pack_1.tar.gz", built_sha256="b" * 64,
+            parser_version=PARSER_VERSION, validation_tier="clean",
+            maturity_state="settled", now_utc=NOW,
+        )
+        before = catalog_db.get_match(self.connection, "100")
+        later = NOW + timedelta(days=1)
+        catalog_db.upsert_fetch_and_build(
+            self.connection, "100",
+            raw_archive="raw_pack_1.tar.gz", raw_sha256="a" * 64,
+            built_archive="built_pack_2.tar.gz", built_sha256="c" * 64,
+            parser_version=PARSER_VERSION, validation_tier="clean",
+            maturity_state="settled", now_utc=later, force_rebuild=True,
+        )
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertEqual(row["first_published_at"], before["first_published_at"])
+        self.assertGreater(row["built_at"], before["built_at"])
+
+    def test_a_supplied_parser_version_is_needed_to_trigger_a_rebuild(self):
+        catalog_db.upsert_fetch_and_build(
+            self.connection, "100",
+            raw_archive="raw_pack_1.tar.gz", raw_sha256="a" * 64,
+            built_archive="built_pack_1.tar.gz", built_sha256="b" * 64,
+            parser_version=PARSER_VERSION, validation_tier="clean",
+            maturity_state="settled", now_utc=NOW,
+        )
+        # A failure report with no parser version and no raw payload must not
+        # read as "everything changed".
+        outcome = catalog_db.upsert_fetch_and_build(
+            self.connection, "100",
+            validation_tier="failed", maturity_state="provisional",
+            now_utc=NOW,
+        )
+        self.assertFalse(outcome["rebuild_required"])
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertEqual(row["validation_tier"], "clean")
+
     # -- selection --------------------------------------------------------
 
     def test_due_refreshes_are_selected_by_time(self):

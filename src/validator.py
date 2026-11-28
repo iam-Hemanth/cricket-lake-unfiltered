@@ -814,18 +814,64 @@ def _scorecard_only_match(match: dict) -> bool:
     The scorecard may score runs. What makes the innings scorecard-only is
     that it has no single delivery: the ball-by-ball record is absent for
     that innings, not partial.
+
+    A Super Over carries no ball-by-ball coverage by design, and an innings
+    that did not bat has a zero scorecard. Neither is a coverage gap, so
+    neither may promote a genuinely broken match to this tier.
     """
     innings = match.get("innings") or []
     if not innings:
         return False
     for inn in innings:
+        if inn.get("super_over"):
+            continue
+        snapshot = inn.get("source_scorecard") or {}
+        scored = (
+            (snapshot.get("runs") or 0) > 0
+            or (snapshot.get("balls") or 0) > 0
+            or (snapshot.get("wickets") or 0) > 0
+        )
+        deliveries = [
+            d for ov in inn.get("overs") or [] for d in ov.get("deliveries") or []
+        ]
+        if not deliveries and scored:
+            return True
+    return False
+
+
+def _is_coverage_or_source_gap_error(message: str) -> bool:
+    """Whether a hard error describes missing coverage rather than a conflict."""
+    return (
+        message == "Incomplete deliveries for a nonzero scorecard innings"
+        or _is_source_gap_message(message)
+    )
+
+
+def _covered_innings_within_scorecard(match: dict) -> bool:
+    """Whether every innings that has deliveries stays inside its scorecard.
+
+    A truncated commentary is a prefix of the scorecard. An innings that
+    reports more runs, balls or wickets than the source scorecard describes
+    is a contradiction, even when another innings is scorecard-only.
+    """
+    for inn in match.get("innings") or []:
         deliveries = [
             d for ov in inn.get("overs") or [] for d in ov.get("deliveries") or []
         ]
         if not deliveries:
-            # This innings has no ball-by-ball record at all.
-            return True
-    return False
+            continue
+        snapshot = inn.get("source_scorecard") or {}
+        legal = sum(1 for d in deliveries if d.get("is_legal"))
+        runs = (sum(d.get("runs", {}).get("total", 0) for d in deliveries)
+                + (inn.get("innings_penalty_runs") or 0))
+        wickets = sum(len(d.get("wickets") or []) for d in deliveries)
+        if snapshot.get("balls") is not None and legal > snapshot["balls"]:
+            return False
+        if snapshot.get("runs") is not None and runs > snapshot["runs"]:
+            return False
+        if snapshot.get("wickets") is not None and wickets > snapshot["wickets"]:
+            return False
+    return True
 
 
 def _partial_coverage_gap(match: dict) -> Optional[dict]:
@@ -961,7 +1007,14 @@ def assess_match(match: dict, scorecard_innings: Optional[List[dict]] = None) ->
     # A match with no deliveries in one of its innings is partly
     # scorecard-only. The coverage gap is disclosed rather than the match
     # being dropped, because ESPN did publish the scorecard for that innings.
-    if _scorecard_only_match(match):
+    # That admission must not swallow a real contradiction elsewhere: every
+    # hard issue has to be a coverage-gap shape, and every innings that does
+    # have deliveries has to stay inside its scorecard.
+    if (
+        _scorecard_only_match(match)
+        and all(_is_coverage_or_source_gap_error(message) for message in hard)
+        and _covered_innings_within_scorecard(match)
+    ):
         gap = _partial_coverage_gap(match) or {}
         issues = [ValidationIssue("SCORECARD_ONLY_NO_COVERAGE", message) for message in hard]
         return MatchAssessment(

@@ -368,6 +368,10 @@ def upsert_fetch_and_build(
     index_meta: Optional[Dict[str, Any]] = None,
     identity: Optional[Dict[str, Any]] = None,
     now_utc: Optional[datetime] = None,
+    force_rebuild: bool = False,
+    stamp_content_timestamps: bool = True,
+    first_published_at: Optional[str] = None,
+    built_at: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Record the outcome of a fetch and its build.
 
@@ -375,6 +379,10 @@ def upsert_fetch_and_build(
     the parser version is unchanged, there is nothing new to publish. The
     attempt counters still move, because the match is still being watched,
     but no built artifact is emitted and the built digest is left alone.
+
+    A missing ``raw_sha256`` or ``parser_version`` means "the caller did not
+    supply this", not "this changed". Treating them as changes would let a
+    failed fetch demote an existing publishable match to ``failed``.
 
     Returns a summary of what changed.
     """
@@ -384,33 +392,48 @@ def upsert_fetch_and_build(
     match_id = str(match_id)
 
     existing = get_match(connection, match_id)
-    raw_changed = existing is None or raw_sha256 != existing["raw_sha256"]
-    parser_changed = (
-        existing is None or parser_version is None
-        or existing["parser_version"] != parser_version
+    raw_changed = existing is None or (
+        raw_sha256 is not None and raw_sha256 != existing["raw_sha256"]
+    )
+    parser_changed = existing is None or (
+        parser_version is not None and existing["parser_version"] != parser_version
     )
     raw_unchanged = existing is not None and raw_sha256 == existing["raw_sha256"]
     same_parser = (
         existing is not None and parser_version is not None
         and existing["parser_version"] == parser_version
     )
-    rebuild_required = raw_changed or parser_changed or existing is None
+    rebuild_required = (
+        existing is None or raw_changed or parser_changed or force_rebuild
+    )
 
-    fields: Dict[str, Any] = {
-        "fetch_attempts": int(existing["fetch_attempts"]) + 1 if existing is not None else 1,
-        "last_attempt_at": now_text,
-        "updated_at": now_text,
-    }
-
-    if raw_available_fields_present(raw_archive, raw_sha256):
-        fields.update({
-            "raw_available": 1,
-            "raw_archive": raw_archive,
-            "raw_sha256": raw_sha256,
-            "raw_fetched_at": raw_fetched_at or now_text,
-        })
+    if existing is not None and not rebuild_required:
+        # An unchanged probe updates only the attempt bookkeeping and the
+        # maturity state. It must not move the row's content timestamps.
+        fields: Dict[str, Any] = {
+            "fetch_attempts": int(existing["fetch_attempts"]) + 1,
+            "last_attempt_at": now_text,
+            "updated_at": existing["updated_at"],
+        }
+    else:
+        fields = {
+            "fetch_attempts": int(existing["fetch_attempts"]) + 1 if existing is not None else 1,
+            "last_attempt_at": now_text,
+            "updated_at": now_text,
+        }
 
     if rebuild_required:
+        # An archive name is only recorded when a build actually happened,
+        # because the ingest commit writes the pack only for a rebuild. A
+        # probe that changed nothing must not point the row at a pack that
+        # was never uploaded.
+        if raw_available_fields_present(raw_archive, raw_sha256):
+            fields.update({
+                "raw_available": 1,
+                "raw_archive": raw_archive,
+                "raw_sha256": raw_sha256,
+                "raw_fetched_at": raw_fetched_at or now_text,
+            })
         if built_archive is not None:
             fields["built_archive"] = built_archive
         if built_sha256 is not None:
@@ -431,8 +454,24 @@ def upsert_fetch_and_build(
             fields.update(identity)
         if index_meta is not None:
             fields["index_meta_json"] = json.dumps(index_meta, ensure_ascii=False)
-        if existing is None or not existing["first_published_at"]:
+        if stamp_content_timestamps and first_published_at is not None:
+            fields["first_published_at"] = first_published_at
+        elif (
+            stamp_content_timestamps
+            and built_archive is not None
+            and validation_tier in PUBLISHABLE_TIERS
+            and (existing is None or not existing["first_published_at"])
+        ):
             fields["first_published_at"] = now_text
+        if stamp_content_timestamps and built_at is not None:
+            fields["built_at"] = built_at
+        elif (
+            stamp_content_timestamps
+            and built_archive is not None
+            and validation_tier in PUBLISHABLE_TIERS
+            and (existing is None or existing["built_sha256"] != built_sha256)
+        ):
+            fields["built_at"] = now_text
         fields["last_failure_kind"] = failure_kind
         fields["last_error"] = error
     else:
@@ -456,6 +495,48 @@ def upsert_fetch_and_build(
         "raw_unchanged": raw_unchanged,
         "same_parser": same_parser,
     }
+
+
+def record_fetch_failure(
+    connection: sqlite3.Connection,
+    match_id: str,
+    *,
+    failure_kind: Optional[str],
+    error: Optional[str],
+    next_refresh_at: Optional[str],
+    maturity_state: Optional[str] = None,
+    now_utc: Optional[datetime] = None,
+) -> None:
+    """Record a fetch that produced no new payload.
+
+    An existing publishable row keeps its tier, its built match and its raw
+    payload: a failed re-fetch is not evidence that what is already published
+    became wrong. Only the attempt bookkeeping changes.
+    """
+    if now_utc is None:
+        now_utc = datetime.now(timezone.utc)
+    now_text = now_utc.astimezone(timezone.utc).isoformat()
+    match_id = str(match_id)
+
+    existing = get_match(connection, match_id)
+    attempts = int(existing["fetch_attempts"]) + 1 if existing is not None else 1
+    fields: Dict[str, Any] = {
+        "fetch_attempts": attempts,
+        "last_attempt_at": now_text,
+        "updated_at": now_text,
+        "last_failure_kind": failure_kind,
+        "last_error": error,
+        "next_refresh_at": next_refresh_at,
+    }
+    if existing is None:
+        fields.update({
+            "raw_available": 0,
+            "validation_tier": "failed",
+            "maturity_state": maturity_state or "provisional",
+        })
+    elif maturity_state is not None:
+        fields["maturity_state"] = maturity_state
+    upsert_match(connection, match_id, **fields)
 
 
 def raw_available_fields_present(raw_archive: Optional[str], raw_sha256: Optional[str]) -> bool:
@@ -518,7 +599,13 @@ def export_matches_index_rows(connection: sqlite3.Connection) -> List[Dict[str, 
             "schema_version": row["schema_version"],
             "validation_status": row["validation_tier"],
             "parser_version": row["parser_version"],
+            "first_published_at": row["first_published_at"],
+            "built_updated_at": row["built_at"],
         }
         record.update(meta)
+        record["validation_status"] = row["validation_tier"]
+        record["parser_version"] = row["parser_version"]
+        record["first_published_at"] = row["first_published_at"]
+        record["built_updated_at"] = row["built_at"]
         rows.append(record)
     return rows

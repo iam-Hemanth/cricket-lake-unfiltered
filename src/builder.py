@@ -25,7 +25,7 @@ from src.validator import MatchAssessment, assess_match
 #: Bumped whenever the output of the constructor, the stage metadata, the
 #: classification, the hundred rules or the validator changes. The catalog
 #: compares it against the stored value to find matches that need a rebuild.
-PARSER_VERSION = "3.3.1-unified"
+PARSER_VERSION = "3.3.2-unified"
 
 #: The schema version this builder emits.
 SCHEMA_VERSION = "3.3.0"

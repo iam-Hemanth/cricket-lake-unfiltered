@@ -97,6 +97,21 @@ def raw_payload_files(raw_match_dir: Path) -> List[Path]:
     )
 
 
+def _bundle_digest(entries: List[Tuple[str, bytes]]) -> str:
+    """Frame and hash ``(member_name, uncompressed_payload)`` pairs.
+
+    Disk and archive digests share this framing, so a bundle verified from a
+    shard and the same bundle verified on disk produce the same digest.
+    """
+    digest = hashlib.sha256()
+    for name, payload in sorted(entries, key=lambda item: item[0]):
+        digest.update(name.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(payload)
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def bundle_sha256(raw_match_dir: Path) -> str:
     """Deterministic digest over the raw files of a match bundle.
 
@@ -105,17 +120,35 @@ def bundle_sha256(raw_match_dir: Path) -> str:
     match therefore produce the same ``bundle_sha256``, which is what lets the
     catalog skip a rebuild.
     """
-    digest = hashlib.sha256()
+    entries: List[Tuple[str, bytes]] = []
     for path in raw_payload_files(raw_match_dir):
-        digest.update(path.name.encode("utf-8"))
-        digest.update(b"\0")
         try:
             with gzip.open(path, "rb") as f:
-                digest.update(f.read())
+                payload = f.read()
         except OSError:
-            digest.update(b"<unreadable>")
-        digest.update(b"\0")
-    return digest.hexdigest()
+            payload = b"<unreadable>"
+        entries.append((path.name, payload))
+    return _bundle_digest(entries)
+
+
+def bundle_sha256_from_members(members: Dict[str, bytes], match_id: str) -> str:
+    """The same digest, computed over a match's members inside an archive.
+
+    Raw archives store each ``*.json.gz`` payload uncompressed under
+    ``<match_id>/<name>.json.gz``. The digest therefore has to decompress
+    nothing: it hashes the member name and the stored payload bytes exactly
+    as :func:`bundle_sha256` hashes the file name and the decompressed file.
+    """
+    prefix = f"{match_id}/"
+    entries: List[Tuple[str, bytes]] = []
+    for name, payload in members.items():
+        if not name.startswith(prefix):
+            continue
+        base = name[len(prefix):]
+        if "/" in base or base.startswith("._") or not base.endswith(".json.gz"):
+            continue
+        entries.append((base, payload))
+    return _bundle_digest(entries)
 
 
 def write_fetch_meta(

@@ -234,17 +234,15 @@ class PipelineIntegrationTests(unittest.TestCase):
         self.assertEqual(sorted(result["published"]), ["100", "101", "102"])
 
     def test_the_plan_defers_what_does_not_fit(self):
-        """A deferred match stays in the catalog for the next run."""
+        """A deferred match is named in the plan, not written during planning."""
         from scripts.pipeline_ingest import build_plan
 
         connection = catalog_db.open_catalog(self.root / "lake_catalog.sqlite")
         plan = build_plan(connection, ["1", "2", "3"], [], [], 2, NOW)
         self.assertEqual(plan["total_selected"], 2)
         self.assertEqual(plan["deferred"], 1)
-        row = catalog_db.get_match(connection, "3")
-        self.assertIsNotNone(row)
-        self.assertEqual(row["maturity_state"], "provisional")
-        self.assertIsNotNone(row["next_refresh_at"])
+        self.assertEqual(plan["deferred_ids"], ["3"])
+        self.assertIsNone(catalog_db.get_match(connection, "3"))
 
 
 class IngestCommitTests(unittest.TestCase):
@@ -313,6 +311,7 @@ class IngestCommitTests(unittest.TestCase):
 
             args = argparse.Namespace(
                 workdir=str(work), repo="example/repo", upload=False,
+                bootstrap=True,
             )
             self.assertEqual(run_commit(args), 0)
 

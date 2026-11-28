@@ -420,7 +420,7 @@ class StageMetadataProvenanceTests(unittest.TestCase):
         self.assertEqual(meta["source_series_id"], 9)
 
     def test_a_built_match_carries_the_stage_fields_without_a_sidecar(self):
-        from src.builder import References, build_match
+        from src.builder import PARSER_VERSION, References, build_match
 
         raw = details()
         raw["match"].update(title="Final", finalType=1)
@@ -428,7 +428,7 @@ class StageMetadataProvenanceTests(unittest.TestCase):
         self.assertIsNotNone(result.match, result.error)
         meta = result.match["meta"]
         self.assertEqual(meta["match_stage"], "Final")
-        self.assertEqual(meta["parser_version"], "3.3.1-unified")
+        self.assertEqual(meta["parser_version"], PARSER_VERSION)
         self.assertEqual(meta["validation_status"], result.tier)
 
     def test_the_awards_fields_survive_the_build(self):

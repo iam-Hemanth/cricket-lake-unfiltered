@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import logging
 import shutil
@@ -45,7 +46,8 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from src import catalog_db, release_store, shard_store  # noqa: E402
 from src.builder import PARSER_VERSION, References, build_match  # noqa: E402
-from src.commentary import load_raw_match_payloads, raw_payload_files  # noqa: E402
+from src.catalog_fields import extract_catalog_metadata  # noqa: E402
+from src.commentary import bundle_sha256, load_raw_match_payloads, raw_payload_files  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -201,9 +203,10 @@ def run_worker(args: argparse.Namespace) -> int:
         staged_raw.mkdir(parents=True, exist_ok=True)
         for file_path in raw_payload_files(match_dir):
             shutil.copy2(file_path, staged_raw / file_path.name)
-        meta_path = match_dir / "meta.json"
-        if meta_path.exists():
-            shutil.copy2(meta_path, staged_raw / "meta.json")
+        for name in ("fetch_meta.json", "meta.json"):
+            metadata = match_dir / name
+            if metadata.exists():
+                shutil.copy2(metadata, staged_raw / name)
 
         (built_out / f"{match_id}.json").write_text(
             json.dumps(result.match, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -261,14 +264,78 @@ def _newest_fetched_at(staged: Dict[str, List[Path]]) -> Dict[str, Path]:
 
 
 def _raw_digest(directory: Optional[Path]) -> Optional[str]:
-    """The digest of a match's stored scorecard."""
+    """The full-bundle digest of a match's stored raw payload."""
     if directory is None:
         return None
-    scorecard = Path(directory) / "scorecard.json.gz"
-    if not scorecard.exists():
+    directory = Path(directory)
+    if not (directory / "scorecard.json.gz").exists():
         return None
-    with gzip.open(scorecard, "rb") as handle:
-        return shard_store.member_digest(handle.read())
+    return bundle_sha256(directory)
+
+
+def _substantive_digest(payload: bytes) -> Optional[str]:
+    """The digest of a match, ignoring the parser-version label.
+
+    The repair rebuilds every match through a new parser, so the version
+    string changes even when the published content does not. Comparing the
+    content without it is what keeps the updated slices small.
+    """
+    try:
+        match = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    meta = match.get("meta")
+    if isinstance(meta, dict):
+        meta.pop("parser_version", None)
+    normalized = json.dumps(match, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _read_master(
+    args: argparse.Namespace,
+    workdir: Path,
+    rebuilt_ids: set,
+) -> Tuple[Dict[str, str], Dict[str, bytes]]:
+    """Read the published master once.
+
+    Returns the substantive digest of every published match and the payloads
+    of the published matches the migration did not rebuild (``legacy``
+    rows). Those payloads are packed into the built shards so no published
+    match disappears from the lake just because its build failed or its raw
+    payload was never captured.
+    """
+    master_dir = workdir / "master"
+    master_dir.mkdir(parents=True, exist_ok=True)
+    master_tar = master_dir / "cricket_lake_unfiltered_master.tar.gz"
+    if not master_tar.exists():
+        try:
+            release_store.download_asset(
+                args.repo, MASTER_RELEASE, master_tar.name, master_dir
+            )
+        except Exception as exc:
+            logger.warning("Could not download the published master: %s", exc)
+            return {}, {}
+
+    digests: Dict[str, str] = {}
+    legacy: Dict[str, bytes] = {}
+    with tarfile.open(master_tar, "r|gz") as tar:
+        for member in tar:
+            if not member.isfile():
+                continue
+            name = Path(member.name).name
+            if not name.endswith(".json") or name in ("lake_manifest.json", "manifest.json"):
+                continue
+            handle = tar.extractfile(member)
+            if handle is None:
+                continue
+            payload = handle.read()
+            match_id = name[:-5]
+            digest = _substantive_digest(payload)
+            if digest:
+                digests[match_id] = digest
+            if match_id.isdigit() and match_id not in rebuilt_ids:
+                legacy[match_id] = payload
+    return digests, legacy
 
 
 def run_merge(args: argparse.Namespace) -> int:
@@ -304,6 +371,10 @@ def run_merge(args: argparse.Namespace) -> int:
             for file_path in raw_payload_files(directory):
                 with gzip.open(file_path, "rb") as handle:
                     members[f"{match_id}/{file_path.name}"] = handle.read()
+            for name in ("fetch_meta.json", "meta.json"):
+                metadata = directory / name
+                if metadata.exists():
+                    members[f"{match_id}/{name}"] = metadata.read_bytes()
         if not members:
             continue
         name = shard_store.shard_name(shard_store.LAYER_RAW, index)
@@ -312,6 +383,17 @@ def run_merge(args: argparse.Namespace) -> int:
         members.clear()
     logger.info("Seeded %s raw matches into %s shards", len(chosen_raw), len(raw_written))
 
+    # -- the published master --------------------------------------------
+    # It tells which rebuilt matches actually changed, so built_at stays
+    # meaningful, and it holds the published matches that have no raw payload
+    # behind them.
+    rebuilt_ids = {path.stem for path in built_stage.glob("*.json")}
+    published_digests, legacy_payloads = _read_master(args, workdir, rebuilt_ids)
+    logger.info(
+        "Published master: %s matches, %s without a raw payload",
+        len(published_digests), len(legacy_payloads),
+    )
+
     # -- the built layer -------------------------------------------------
     # Only the digest and the metadata are kept, not the match bodies. The
     # built layer is several gigabytes, and holding it in memory alongside
@@ -319,6 +401,24 @@ def run_merge(args: argparse.Namespace) -> int:
     built_digests: Dict[str, str] = {}
     built_summary: Dict[str, dict] = {}
     built_written = []
+
+    def built_record(match_id: str, payload: bytes, legacy: bool) -> Optional[dict]:
+        try:
+            match = json.loads(payload.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        meta = match.get("meta") or {}
+        identity, index_meta = extract_catalog_metadata(match)
+        return {
+            "tier": meta.get("validation_status") or "clean",
+            "parser_version": meta.get("parser_version") or PARSER_VERSION,
+            "schema_version": meta.get("schema_version"),
+            "identity": identity,
+            "index_meta": index_meta,
+            "legacy": legacy,
+            "substantive": _substantive_digest(payload),
+        }
+
     for index in range(shard_store.NUM_SHARDS):
         members: Dict[str, bytes] = {}
         for path in sorted(built_stage.glob("*.json")):
@@ -326,32 +426,21 @@ def run_merge(args: argparse.Namespace) -> int:
             if shard_store.shard_id(match_id) != index:
                 continue
             payload = path.read_bytes()
+            record = built_record(match_id, payload, legacy=False)
+            if record is None:
+                continue
             members[f"{match_id}.json"] = payload
             built_digests[match_id] = shard_store.member_digest(payload)
-            try:
-                match = json.loads(payload.decode("utf-8"))
-            except (UnicodeDecodeError, json.JSONDecodeError):
+            built_summary[match_id] = record
+        for match_id, payload in legacy_payloads.items():
+            if shard_store.shard_id(match_id) != index:
                 continue
-            meta = match.get("meta") or {}
-            outcome = match.get("outcome") or {}
-            built_summary[match_id] = {
-                "tier": meta.get("validation_status") or "clean",
-                "parser_version": meta.get("parser_version") or PARSER_VERSION,
-                "schema_version": meta.get("schema_version"),
-                "match_date": (meta.get("dates") or [None])[0],
-                "format": meta.get("format"),
-                "format_bucket": meta.get("format_bucket"),
-                "competition": meta.get("competition"),
-                "season": meta.get("season"),
-                "gender": meta.get("gender"),
-                "winner": outcome.get("winner"),
-                "result": outcome.get("result"),
-                "total_balls": sum(
-                    1 for inn in match.get("innings") or []
-                    for over in inn.get("overs") or []
-                    for _ in over.get("deliveries") or []
-                ),
-            }
+            record = built_record(match_id, payload, legacy=True)
+            if record is None:
+                continue
+            members[f"{match_id}.json"] = payload
+            built_digests[match_id] = shard_store.member_digest(payload)
+            built_summary[match_id] = record
         if not members:
             continue
         name = shard_store.shard_name(shard_store.LAYER_BUILT, index)
@@ -362,45 +451,85 @@ def run_merge(args: argparse.Namespace) -> int:
 
     # -- the catalog -----------------------------------------------------
     now = datetime.now(timezone.utc)
+    now_text = now.isoformat()
     for match_id, summary in built_summary.items():
+        built_archive = shard_store.shard_name(
+            shard_store.LAYER_BUILT, shard_store.shard_id(match_id)
+        )
+        if summary["legacy"]:
+            # A published match that was not rebuilt must not disappear. If
+            # its raw payload was staged, the raw layer still holds it; only
+            # the build failed, so it is recorded as incomplete. Otherwise it
+            # is a published match that never had a raw payload at all.
+            directory = chosen_raw.get(match_id)
+            raw_digest = _raw_digest(directory) if directory else None
+            fetched = _fetched_at(directory) if directory else None
+            first_published = fetched or summary["identity"].get("match_date") or now_text
+            if raw_digest:
+                catalog_db.upsert_fetch_and_build(
+                    connection, match_id,
+                    raw_archive=shard_store.shard_name(
+                        shard_store.LAYER_RAW, shard_store.shard_id(match_id)
+                    ),
+                    raw_sha256=raw_digest,
+                    raw_fetched_at=fetched or now_text,
+                    built_archive=built_archive,
+                    built_sha256=built_digests[match_id],
+                    parser_version=summary["parser_version"],
+                    schema_version=summary["schema_version"],
+                    validation_tier=summary["tier"],
+                    maturity_state="settled_incomplete",
+                    completeness_gaps=["build_failed"],
+                    identity=summary["identity"],
+                    index_meta=summary["index_meta"],
+                    first_published_at=first_published,
+                    built_at=first_published,
+                    now_utc=now,
+                )
+            else:
+                catalog_db.upsert_fetch_and_build(
+                    connection, match_id,
+                    raw_archive=None, raw_sha256=None,
+                    built_archive=built_archive,
+                    built_sha256=built_digests[match_id],
+                    parser_version=summary["parser_version"],
+                    schema_version=summary["schema_version"],
+                    validation_tier=summary["tier"],
+                    maturity_state="legacy_unbacked",
+                    completeness_gaps=["missing_raw_payload"],
+                    identity=summary["identity"],
+                    index_meta=summary["index_meta"],
+                    first_published_at=first_published,
+                    built_at=first_published,
+                    now_utc=now,
+                )
+            continue
+
+        directory = chosen_raw.get(match_id)
+        fetched = _fetched_at(directory) if directory else None
+        first_published = fetched or summary["identity"].get("match_date") or now_text
+        changed = published_digests.get(match_id) != summary["substantive"]
         catalog_db.upsert_fetch_and_build(
             connection, match_id,
-            raw_archive=shard_store.shard_name(shard_store.LAYER_RAW, shard_store.shard_id(match_id)),
-            raw_sha256=_raw_digest(chosen_raw.get(match_id)),
-            raw_fetched_at=_fetched_at(chosen_raw[match_id]) if match_id in chosen_raw else now.isoformat(),
-            built_archive=shard_store.shard_name(shard_store.LAYER_BUILT, shard_store.shard_id(match_id)),
+            raw_archive=shard_store.shard_name(
+                shard_store.LAYER_RAW, shard_store.shard_id(match_id)
+            ),
+            raw_sha256=_raw_digest(directory),
+            raw_fetched_at=fetched or now_text,
+            built_archive=built_archive,
             built_sha256=built_digests[match_id],
             parser_version=summary["parser_version"],
             schema_version=summary["schema_version"],
             validation_tier=summary["tier"],
             maturity_state="settled",
             completeness_gaps=[],
-            identity={
-                "match_date": summary["match_date"],
-                "format": summary["format"],
-                "format_bucket": summary["format_bucket"],
-                "competition": summary["competition"],
-                "season": summary["season"],
-                "gender": summary["gender"],
-                "winner": summary["winner"],
-                "result": summary["result"],
-            },
-            index_meta={
-                "total_balls": sum(
-                    1 for inn in match.get("innings") or []
-                    for over in inn.get("overs") or []
-                    for _ in over.get("deliveries") or []
-                ),
-            },
+            identity=summary["identity"],
+            index_meta=summary["index_meta"],
+            first_published_at=first_published,
+            built_at=now_text if changed else first_published,
             now_utc=now,
         )
     connection.commit()
-
-    # The published lake holds a few hundred matches that were never given a
-    # raw payload. They cannot be rebuilt, and they must not disappear: the
-    # plan keeps them as legacy_unbacked so that a later targeted fetch can
-    # give them a raw payload. Without this they would vanish from the lake.
-    preserved = _preserve_unbacked(args, connection, workdir, now)
 
     catalog_db.save_catalog_gz(connection, workdir / "lake_catalog.sqlite.gz")
 
@@ -409,88 +538,13 @@ def run_merge(args: argparse.Namespace) -> int:
         "built_matches": len(built_digests),
         "raw_shards": len(raw_written),
         "built_shards": len(built_written),
-        "legacy_unbacked": preserved,
+        "legacy_unbacked": len(legacy_payloads),
         "catalog_rows": catalog_db.count_matches(connection),
     }
     logger.info("Merge complete: %s", json.dumps(summary))
     print(json.dumps(summary, indent=2))
     connection.close()
     return 0
-
-
-def _preserve_unbacked(
-    args: argparse.Namespace,
-    connection,
-    workdir: Path,
-    now: datetime,
-) -> int:
-    """Keep the published matches that have no raw payload behind them.
-
-    Their existing built JSON is carried into the built layer unchanged, so
-    the migration loses nothing. They are recorded as ``legacy_unbacked``,
-    which keeps them published while marking that a targeted fetch is needed
-    to give them a raw payload.
-    """
-    master_dir = workdir / "master"
-    master_dir.mkdir(parents=True, exist_ok=True)
-    master_tar = master_dir / "cricket_lake_unfiltered_master.tar.gz"
-    if not master_tar.exists():
-        try:
-            release_store.download_asset(
-                args.repo, MASTER_RELEASE, master_tar.name, master_dir
-            )
-        except Exception as exc:
-            logger.warning("Could not download the published master: %s", exc)
-            return 0
-
-    known = set(catalog_db.all_match_ids(connection))
-    preserved = 0
-    with tarfile.open(master_tar, "r|gz") as tar:
-        for member in tar:
-            if not member.isfile():
-                continue
-            name = Path(member.name).name
-            if not name.endswith(".json") or name == "lake_manifest.json":
-                continue
-            match_id = name[:-5]
-            if not match_id.isdigit() or match_id in known:
-                continue
-            handle = tar.extractfile(member)
-            if handle is None:
-                continue
-            payload = handle.read()
-            try:
-                match = json.loads(payload.decode("utf-8"))
-            except (UnicodeDecodeError, json.JSONDecodeError):
-                continue
-            meta = match.get("meta") or {}
-            catalog_db.upsert_fetch_and_build(
-                connection, match_id,
-                raw_archive=None, raw_sha256=None,
-                built_archive=None,
-                built_sha256=None,
-                parser_version=meta.get("parser_version"),
-                schema_version=meta.get("schema_version"),
-                validation_tier=meta.get("validation_status") or "clean",
-                maturity_state="legacy_unbacked",
-                completeness_gaps=["missing_raw_payload"],
-                identity={
-                    "match_date": (meta.get("dates") or [None])[0],
-                    "format": meta.get("format"),
-                    "format_bucket": meta.get("format_bucket"),
-                    "competition": meta.get("competition"),
-                    "season": meta.get("season"),
-                    "gender": meta.get("gender"),
-                    "winner": (match.get("outcome") or {}).get("winner"),
-                    "result": (match.get("outcome") or {}).get("result"),
-                },
-                now_utc=now,
-            )
-            preserved += 1
-    if preserved:
-        logger.info("Preserved %s published matches that have no raw payload", preserved)
-    connection.commit()
-    return preserved
 
 
 def run_verify(args: argparse.Namespace) -> int:

@@ -72,8 +72,16 @@ def main() -> int:
     records: dict[str, dict] = {}
     for row in rows:
         mid = str(row["match_id"])
-        published = recovery if row.get("schema_version") == "3.3.0" else ""
-        records[mid] = enrich(row, comps, teams, published)
+        first_published = (row.get("first_published_at") or "").strip()
+        built_updated = (row.get("built_updated_at") or "").strip()
+        published = first_published or (
+            recovery if row.get("schema_version") == "3.3.0" else ""
+        )
+        updated = max(
+            [value for value in (first_published, built_updated) if value],
+            default=published,
+        )
+        records[mid] = enrich(row, comps, teams, published, updated)
 
     # A match the index does not list but the snapshot holds is read from the
     # snapshot itself, so the index and the archive cannot disagree about
@@ -83,7 +91,7 @@ def main() -> int:
         if mid in records or not mid.isdigit():
             continue
         row = record_from_match_json(mid, path)
-        records[mid] = enrich(row, comps, teams, recovery)
+        records[mid] = enrich(row, comps, teams, recovery, recovery)
 
     ordered = sorted(
         records.values(),

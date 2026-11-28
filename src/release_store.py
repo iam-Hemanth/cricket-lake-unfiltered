@@ -19,10 +19,11 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, TypeVar
 
 #: The repository the lake lives in.
 DEFAULT_REPO = "iam-Hemanth/cricket-lake-unfiltered"
@@ -34,6 +35,32 @@ RELEASE_CATALOG = "lake-catalog"
 RELEASE_PUBLISHED = "data-unfiltered-master"
 
 _USER_AGENT = "cricket-lake-unfiltered"
+
+#: The HTTP statuses that are worth retrying. A 4xx other than 429 is a
+#: request the server will keep rejecting, so it is raised immediately.
+_RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
+_RETRY_ATTEMPTS = 4
+_RETRY_BASE_SECONDS = 1.0
+_RETRY_MAX_SECONDS = 30.0
+
+_T = TypeVar("_T")
+
+
+def _with_retries(operation: Callable[[], _T]) -> _T:
+    """Run an HTTP operation, retrying transient failures with backoff."""
+    delay = _RETRY_BASE_SECONDS
+    for attempt in range(1, _RETRY_ATTEMPTS + 1):
+        try:
+            return operation()
+        except urllib.error.HTTPError as exc:
+            if exc.code not in _RETRY_STATUS or attempt == _RETRY_ATTEMPTS:
+                raise
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            if attempt == _RETRY_ATTEMPTS:
+                raise
+        time.sleep(delay)
+        delay = min(delay * 2, _RETRY_MAX_SECONDS)
+    raise RuntimeError("unreachable")
 
 
 def _token() -> Optional[str]:
@@ -89,10 +116,14 @@ def download_asset(
     handle, temp_name = tempfile.mkstemp(dir=str(destination), suffix=".tmp")
     os.close(handle)
     temp_path = Path(temp_name)
-    try:
+
+    def download() -> None:
         with urllib.request.urlopen(request, timeout=300) as response:
             with open(temp_path, "wb") as out:
                 shutil.copyfileobj(response, out)
+
+    try:
+        _with_retries(download)
         temp_path.replace(target)
     except Exception:
         temp_path.unlink(missing_ok=True)
@@ -104,23 +135,37 @@ def list_assets(repo: str, release: str) -> List[Dict[str, Any]]:
     """The assets of a release, or an empty list when it does not exist."""
     url = f"https://api.github.com/repos/{repo}/releases/tags/{release}"
     request = urllib.request.Request(url, headers=_api_headers())
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            return []
-        raise
+
+    def fetch() -> Dict[str, Any]:
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return {}
+            raise
+
+    payload = _with_retries(fetch)
     assets = payload.get("assets") or []
     return [
         {
+            "id": asset.get("id"),
             "name": asset.get("name"),
             "size": asset.get("size"),
             "digest": asset.get("digest"),
+            "updated_at": asset.get("updated_at"),
             "url": asset.get("browser_download_url"),
         }
         for asset in assets
     ]
+
+
+def find_asset(repo: str, release: str, asset_name: str) -> Optional[Dict[str, Any]]:
+    """One asset of a release, or None when it is not there."""
+    for asset in list_assets(repo, release):
+        if asset.get("name") == asset_name:
+            return asset
+    return None
 
 
 def download_assets(
@@ -142,18 +187,35 @@ def upload_asset(
     path: str | Path,
     asset_name: Optional[str] = None,
     clobber: bool = True,
+    expected_updated_at: Optional[str] = None,
 ) -> str:
     """Upload one file as a release asset.
 
     An asset with the same name is deleted first when clobbering is allowed,
     because the GitHub API refuses to overwrite an existing asset.
+
+    ``expected_updated_at`` makes the upload optimistic: when the asset
+    changed on the release since the caller read it, the upload fails closed
+    rather than overwriting another run's catalog.
     """
     source = Path(path)
     name = asset_name or source.name
-    if clobber:
+    current = find_asset(repo, release, name)
+    if expected_updated_at is not None:
+        if current is None:
+            raise RuntimeError(
+                f"{name} disappeared from {release} while this run was working; "
+                "refusing to recreate it unguarded"
+            )
+        if current.get("updated_at") not in (None, expected_updated_at):
+            raise RuntimeError(
+                f"{name} changed on {release} while this run was working "
+                f"(expected {expected_updated_at}, found {current.get('updated_at')}); "
+                "refusing to overwrite it"
+            )
+    if clobber and current is not None:
         delete_asset(repo, release, name)
 
-    url = f"https://uploads.github.com/repos/{repo}/releases/assets"
     # The upload needs the asset id, which comes from the release itself.
     release_payload = _release(repo, release)
     url = f"https://uploads.github.com/repos/{repo}/releases/{release_payload['id']}/assets"
@@ -166,12 +228,16 @@ def upload_asset(
     token = _token()
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    request = urllib.request.Request(
-        url, data=payload, headers=headers, method="POST"
-    )
-    request.add_header("X-GitHub-Asset-Name", name)
-    with urllib.request.urlopen(request, timeout=600) as response:
-        body = json.loads(response.read().decode("utf-8"))
+
+    def upload() -> Dict[str, Any]:
+        request = urllib.request.Request(
+            url, data=payload, headers=headers, method="POST"
+        )
+        request.add_header("X-GitHub-Asset-Name", name)
+        with urllib.request.urlopen(request, timeout=600) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    body = _with_retries(upload)
     return str(body.get("browser_download_url") or name)
 
 
@@ -210,29 +276,22 @@ def delete_asset(repo: str, release: str, name: str) -> bool:
     for asset in list_assets(repo, release):
         if asset.get("name") != name:
             continue
-        url = f"https://api.github.com/repos/{repo}/releases/assets/{_asset_id(repo, release, name)}"
-        request = urllib.request.Request(url, headers=_api_headers(), method="DELETE")
-        try:
-            with urllib.request.urlopen(request, timeout=60):
-                return True
-        except urllib.error.HTTPError:
+        if asset.get("id") is None:
             return False
+        url = f"https://api.github.com/repos/{repo}/releases/assets/{asset['id']}"
+        request = urllib.request.Request(url, headers=_api_headers(), method="DELETE")
+
+        def delete() -> bool:
+            try:
+                with urllib.request.urlopen(request, timeout=60):
+                    return True
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    return False
+                raise
+
+        return _with_retries(delete)
     return False
-
-
-def _asset_id(repo: str, release: str, name: str) -> Optional[int]:
-    """The id of one asset."""
-    url = f"https://api.github.com/repos/{repo}/releases/tags/{release}"
-    request = urllib.request.Request(url, headers=_api_headers())
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError:
-        return None
-    for asset in payload.get("assets") or []:
-        if asset.get("name") == name:
-            return asset.get("id")
-    return None
 
 
 def extract_tar_gz(archive: str | Path, dest_dir: str | Path, members: Optional[Sequence[str]] = None) -> List[str]:

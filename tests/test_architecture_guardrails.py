@@ -261,6 +261,54 @@ class BuilderContractTests(unittest.TestCase):
         self.assertTrue(hasattr(catalog_db, "select_due_refreshes"))
 
 
+class PipelineWorkflowContractTests(unittest.TestCase):
+    """The workflows must keep calling the stages that make the lake work."""
+
+    def _text(self, name: str) -> str:
+        return _read(WORKFLOWS_DIR / name)
+
+    def test_ingest_discovers_and_restores_the_schedule_feed(self):
+        text = self._text("ingest.yml")
+        for token in (
+            "--discover",
+            "--repo ${{ github.repository }}",
+            "has_built_changes",
+            "gh workflow run publish.yml",
+            "series_schedule.json",
+            "lake-schedule",
+        ):
+            self.assertIn(token, text, f"ingest.yml does not mention {token!r}.")
+
+    def test_reparse_uploads_its_build_and_dispatches_publish(self):
+        text = self._text("reparse.yml")
+        for token in ("--upload", "has_changes", "gh workflow run publish.yml"):
+            self.assertIn(token, text, f"reparse.yml does not mention {token!r}.")
+
+    def test_publish_compacts_before_it_publishes(self):
+        """Compaction and the snapshot both write the catalog; never in parallel."""
+        import yaml
+        document = yaml.safe_load(self._text("publish.yml"))
+        jobs = document["jobs"]
+        self.assertIn("compact", jobs)
+        self.assertTrue(jobs["publish"].get("needs"), "publish must wait for compact")
+        needs = jobs["publish"]["needs"]
+        self.assertEqual(needs, ["compact"] if isinstance(needs, list) else "compact")
+        self.assertIn("always()", str(jobs["publish"].get("if", "")))
+
+    def test_publish_builds_the_slices_and_the_pages_site(self):
+        text = self._text("publish.yml")
+        for token in (
+            "download-slices",
+            "scripts.downloads.prepare",
+            "scripts.downloads.build_shard",
+            "scripts.downloads.catalog",
+            "scripts.downloads.calendar",
+            "upload-pages-artifact",
+            "deploy-pages",
+        ):
+            self.assertIn(token, text, f"publish.yml does not mention {token!r}.")
+
+
 class AgentInstructionTests(unittest.TestCase):
     """The instructions must exist and must say what they must say."""
 

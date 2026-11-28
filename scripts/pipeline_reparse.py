@@ -25,13 +25,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from src import catalog_db, release_store, shard_store  # noqa: E402
-from src.builder import PARSER_VERSION, References, build_match  # noqa: E402
+from src.builder import PARSER_VERSION, SCHEMA_VERSION, References, build_match  # noqa: E402
+from src.catalog_fields import extract_catalog_metadata  # noqa: E402
 from src.commentary import load_raw_match_payloads  # noqa: E402
+from src.completeness import failure_maturity  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
+    handlers=[logging.StreamHandler(sys.stderr)],
 )
 logger = logging.getLogger("reparse")
 
@@ -114,10 +116,20 @@ def main() -> int:
     workdir.mkdir(parents=True, exist_ok=True)
 
     catalog_path = Path(args.catalog) if args.catalog else workdir / "lake_catalog.sqlite.gz"
+    catalog_updated_at = None
     if catalog_path.exists():
         connection = catalog_db.load_catalog_gz(catalog_path)
+        if args.catalog is None:
+            asset = release_store.find_asset(
+                args.repo, release_store.RELEASE_CATALOG, "lake_catalog.sqlite.gz"
+            )
+            catalog_updated_at = asset.get("updated_at") if asset else None
     else:
         logger.info("Downloading the catalog from %s", release_store.RELEASE_CATALOG)
+        asset = release_store.find_asset(
+            args.repo, release_store.RELEASE_CATALOG, "lake_catalog.sqlite.gz"
+        )
+        catalog_updated_at = asset.get("updated_at") if asset else None
         release_store.download_asset(
             args.repo, release_store.RELEASE_CATALOG,
             "lake_catalog.sqlite.gz", workdir,
@@ -142,16 +154,14 @@ def main() -> int:
         connection.close()
         return 0
 
-    # The raw payloads come from the release the catalog names.
+    # The raw payloads come from the release the catalog names. Only the
+    # archives the targets actually live in are downloaded.
     archive_dir = workdir / "archives"
     archive_dir.mkdir(parents=True, exist_ok=True)
-    needed_archives = sorted({
-        row["archive"] for row in connection.execute(
-            "SELECT DISTINCT raw_archive AS archive FROM matches"
-            " WHERE raw_available = 1 AND raw_archive IS NOT NULL"
-        )
-    })
-    for archive in needed_archives:
+    targets_by_archive = shard_store.catalog_targets(
+        connection, targets, shard_store.LAYER_RAW
+    )
+    for archive in sorted(targets_by_archive):
         target = archive_dir / archive
         if not target.exists():
             try:
@@ -173,53 +183,106 @@ def main() -> int:
     references = load_references()
     built_root = workdir / "built"
     built_root.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc)
+    stamp = _stamp()
+    built_pack = shard_store.pack_name(shard_store.LAYER_BUILT, stamp)
 
     rebuilt: Dict[str, bytes] = {}
     failures: List[Dict[str, str]] = []
+    updated_rows = 0
     for index, match_id in enumerate(materialized["extracted"], 1):
+        existing = catalog_db.get_match(connection, match_id)
+        if existing is None:
+            failures.append({"match_id": match_id, "error": "Not in catalog"})
+            continue
+        attempts = int(existing["fetch_attempts"] or 0)
         match_dir = workdir / "raw" / match_id
         details, chunks, error = load_raw_match_payloads(match_dir)
         if error or not details:
             failures.append({"match_id": match_id, "error": f"Payload error: {error}"})
             continue
-        result = build_match(match_id, details, chunks, references)
+        result = build_match(
+            match_id, details, chunks, references, refresh_attempts=attempts,
+        )
+
+        common = {
+            "raw_archive": existing["raw_archive"],
+            "raw_sha256": existing["raw_sha256"],
+            "raw_fetched_at": existing["raw_fetched_at"],
+            "parser_version": PARSER_VERSION,
+            "schema_version": SCHEMA_VERSION,
+            "force_rebuild": args.force,
+            "now_utc": now,
+        }
         if not result.ok:
+            maturity, next_refresh = failure_maturity(details, attempts, now)
+            catalog_db.upsert_fetch_and_build(
+                connection, match_id,
+                validation_tier="failed",
+                completeness_gaps=[],
+                maturity_state=maturity,
+                next_refresh_at=next_refresh,
+                failure_kind=result.failure_kind or "construction_error",
+                error=result.error,
+                **common,
+            )
             failures.append({"match_id": match_id, "error": result.error or "Build failed"})
+            updated_rows += 1
             continue
-        rebuilt[match_id] = json.dumps(result.match, indent=2, ensure_ascii=False).encode("utf-8")
 
-    stamp = _stamp()
-    built_pack = shard_store.pack_name(shard_store.LAYER_BUILT, stamp)
-    if rebuilt:
-        shard_store.write_built_pack(workdir / built_pack, rebuilt)
-
-    now = datetime.now(timezone.utc)
-    for match_id, payload in rebuilt.items():
+        payload = json.dumps(result.match, indent=2, ensure_ascii=False).encode("utf-8")
+        rebuilt[match_id] = payload
+        identity, index_meta = extract_catalog_metadata(result.match)
         catalog_db.upsert_fetch_and_build(
             connection, match_id,
-            raw_archive=None, raw_sha256=None,
             built_archive=built_pack,
             built_sha256=shard_store.member_digest(payload),
-            parser_version=PARSER_VERSION,
-            schema_version="3.3.0",
-            now_utc=now,
+            validation_tier=result.tier,
+            completeness_gaps=result.completeness.gaps if result.completeness else [],
+            maturity_state=result.completeness.maturity_state if result.completeness else "settled",
+            next_refresh_at=result.completeness.next_refresh_at if result.completeness else None,
+            failure_kind=None,
+            error=None,
+            identity=identity,
+            index_meta=index_meta,
+            **common,
         )
-    connection.commit()
+        updated_rows += 1
 
-    catalog_db.save_catalog_gz(connection, workdir / "lake_catalog.sqlite.gz")
-    if args.upload and rebuilt:
-        release_store.upload_asset(args.repo, release_store.RELEASE_BUILT, workdir / built_pack)
-        release_store.upload_asset(
-            args.repo, release_store.RELEASE_CATALOG, workdir / "lake_catalog.sqlite.gz"
-        )
+    if rebuilt:
+        _, built_digests = shard_store.write_built_pack(workdir / built_pack, rebuilt)
+        for match_id, digest in built_digests.items():
+            catalog_db.upsert_match(
+                connection, match_id,
+                built_archive=built_pack,
+                built_sha256=digest,
+            )
+    connection.commit()
 
     summary = {
         "targeted": len(targets),
         "rebuilt": len(rebuilt),
         "failed": len(failures),
+        "updated_rows": updated_rows,
         "has_changes": bool(rebuilt),
         "built_pack": built_pack if rebuilt else None,
     }
+    catalog_db.record_run(
+        connection, f"reparse-{stamp}", "reparse",
+        finished_at=now.isoformat(), summary=summary,
+    )
+    catalog_db.save_catalog_gz(connection, workdir / "lake_catalog.sqlite.gz")
+
+    if args.upload:
+        if rebuilt:
+            release_store.upload_asset(args.repo, release_store.RELEASE_BUILT, workdir / built_pack)
+        if updated_rows:
+            release_store.upload_asset(
+                args.repo, release_store.RELEASE_CATALOG,
+                workdir / "lake_catalog.sqlite.gz",
+                expected_updated_at=catalog_updated_at,
+            )
+
     logger.info("Reparse complete: %s", json.dumps(summary))
     print(json.dumps(summary, indent=2))
     if failures:

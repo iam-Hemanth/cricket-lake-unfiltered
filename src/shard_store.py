@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from src.catalog_db import NUM_SHARDS
-from src.commentary import raw_payload_files
+from src.commentary import bundle_sha256_from_members, raw_payload_files
 
 #: The layers the lake stores.
 LAYER_RAW = "raw"
@@ -80,11 +80,43 @@ def member_digest(payload: bytes) -> str:
     return sha256_bytes(payload)
 
 
-def _member_names(layer: str, match_id: str) -> List[str]:
-    """The archive member names a match occupies in one layer."""
+def members_by_match(layer: str, members: Dict[str, bytes]) -> Dict[str, Dict[str, bytes]]:
+    """Group an archive's members by the match they belong to.
+
+    A raw match occupies every ``<match_id>/...`` member in the archive: its
+    scorecard, every commentary chunk, and its fetch metadata. A built match
+    occupies ``<match_id>.json``. Grouping once keeps every later lookup O(1).
+    """
+    grouped: Dict[str, Dict[str, bytes]] = {}
     if layer == LAYER_RAW:
-        return [f"{match_id}/scorecard.json.gz"]
-    return [f"{match_id}.json"]
+        for name, payload in members.items():
+            if "/" not in name:
+                continue
+            match_id, base = name.split("/", 1)
+            if not match_id or not base or base.startswith("._"):
+                continue
+            grouped.setdefault(match_id, {})[name] = payload
+        return grouped
+    for name, payload in members.items():
+        if "/" in name or not name.endswith(".json"):
+            continue
+        grouped.setdefault(name[:-5], {})[name] = payload
+    return grouped
+
+
+def has_payload(layer: str, match_id: str, match_members: Dict[str, bytes]) -> bool:
+    """Whether a match's member group holds the payload the layer requires."""
+    if layer == LAYER_RAW:
+        return f"{match_id}/scorecard.json.gz" in match_members
+    return f"{match_id}.json" in match_members
+
+
+def member_digest_for(layer: str, match_id: str, match_members: Dict[str, bytes]) -> Optional[str]:
+    """The digest the catalog stores for a match's member group."""
+    if layer == LAYER_RAW:
+        return bundle_sha256_from_members(match_members, match_id)
+    payload = match_members.get(f"{match_id}.json")
+    return member_digest(payload) if payload is not None else None
 
 
 def write_pack(
@@ -136,14 +168,22 @@ def read_pack(path: str | Path) -> Dict[str, bytes]:
 def collect_raw_members(raw_match_dirs: Dict[str, Path]) -> Dict[str, bytes]:
     """Gather the raw members of several match directories.
 
-    Each match directory contributes its scorecard and every commentary chunk
-    it holds, so the raw layer keeps the complete evidence of a fetch.
+    Each match directory contributes its scorecard, every commentary chunk it
+    holds, and its fetch metadata, so the raw layer keeps the complete
+    evidence of a fetch. The ``*.json.gz`` payloads are stored uncompressed
+    inside the archive, which is the convention both the migration and the
+    ingest path already use.
     """
     members: Dict[str, bytes] = {}
     for match_id, directory in raw_match_dirs.items():
+        directory = Path(directory)
         for path in raw_payload_files(directory):
             with gzip.open(path, "rb") as handle:
                 members[f"{match_id}/{path.name}"] = handle.read()
+        for name in ("fetch_meta.json", "meta.json"):
+            metadata = directory / name
+            if metadata.exists():
+                members[f"{match_id}/{name}"] = metadata.read_bytes()
     return members
 
 
@@ -209,29 +249,30 @@ def materialize_from_catalog(
             continue
         archives_opened.append(archive_name)
         members = read_pack(archive_path)
+        grouped = members_by_match(layer, members)
         for match_id, digest in entries:
-            payload = None
-            for candidate in _member_names(layer, match_id):
-                if candidate in members:
-                    payload = members[candidate]
-                    break
-            if payload is None:
+            match_members = grouped.get(match_id) or {}
+            if not has_payload(layer, match_id, match_members):
                 missing.append(match_id)
                 continue
             if verify and digest:
-                actual = member_digest(payload)
+                actual = member_digest_for(layer, match_id, match_members)
                 if actual != digest:
                     mismatched.append(match_id)
                     continue
             if layer == LAYER_RAW:
                 target_dir = destination / match_id
                 target_dir.mkdir(parents=True, exist_ok=True)
-                for name in _member_names(layer, match_id):
-                    with gzip.open(target_dir / Path(name).name, "wb") as out:
-                        out.write(members[name])
+                for name, payload in match_members.items():
+                    base = name.split("/", 1)[1]
+                    if base.endswith(".json.gz"):
+                        with gzip.open(target_dir / base, "wb") as out:
+                            out.write(payload)
+                    elif base in ("fetch_meta.json", "meta.json"):
+                        (target_dir / base).write_bytes(payload)
             else:
                 with open(destination / f"{match_id}.json", "wb") as out:
-                    out.write(payload)
+                    out.write(match_members[f"{match_id}.json"])
             extracted.append(match_id)
 
     return {
@@ -274,47 +315,37 @@ def compact_shards(
     for row in cursor:
         authoritative[str(row["match_id"])] = (str(row["archive"]), row["digest"])
 
-    # Gather the members of the packs that are being folded in.
-    pending: Dict[str, bytes] = {}
-    for pack_name in pending_packs:
-        pack_path = archive_root / pack_name
-        if not pack_path.exists():
-            continue
-        pending.update(read_pack(pack_path))
+    # Each distinct archive is read once, however many matches it holds. The
+    # old version reopened a shard inside the per-match loop and re-parsed it
+    # hundreds of times.
+    archive_cache: Dict[str, Dict[str, Dict[str, bytes]]] = {}
+    superseded: Set[str] = set()
+
+    def grouped_members(archive_name: str) -> Dict[str, Dict[str, bytes]]:
+        if archive_name not in archive_cache:
+            archive_path = archive_root / archive_name
+            if not archive_path.exists():
+                superseded.add(archive_name)
+                archive_cache[archive_name] = {}
+            else:
+                archive_cache[archive_name] = members_by_match(layer, read_pack(archive_path))
+        return archive_cache[archive_name]
 
     # Group every match by the shard it belongs to.
     shard_members: Dict[int, Dict[str, bytes]] = {index: {} for index in range(num_shards)}
-    superseded: Set[str] = set()
+    placed: List[str] = []
 
     for match_id, (archive_name, digest) in authoritative.items():
-        payload = None
-        member_name = None
-        if archive_name in pending_packs:
-            for candidate in _member_names(layer, match_id):
-                if candidate in pending:
-                    payload = pending[candidate]
-                    member_name = candidate
-                    break
-        if payload is None:
-            # The match's authoritative member lives in a shard already.
-            shard_path = archive_root / archive_name
-            if not shard_path.exists():
-                superseded.add(archive_name)
-                continue
-            members = read_pack(shard_path)
-            for candidate in _member_names(layer, match_id):
-                if candidate in members:
-                    payload = members[candidate]
-                    member_name = candidate
-                    break
-        if payload is None:
+        match_members = grouped_members(archive_name).get(match_id) or {}
+        if not has_payload(layer, match_id, match_members):
             continue
-        if digest and member_digest(payload) != digest:
+        if digest and member_digest_for(layer, match_id, match_members) != digest:
             # The stored copy does not match the catalog; leave it alone
             # rather than promote a corrupt member.
             continue
         index = shard_id(match_id, num_shards)
-        shard_members[index][member_name] = payload
+        shard_members[index].update(match_members)
+        placed.append(match_id)
 
     written: List[str] = []
     for index in range(num_shards):
@@ -324,21 +355,20 @@ def compact_shards(
         name = shard_name(layer, index, num_shards)
         write_pack(output_root / name, layer, members)
         written.append(name)
+        members.clear()
 
-    # Repoint the catalog at the shards.
-    updated = 0
-    for match_id in authoritative:
+    # Repoint only the rows whose verified payload was actually written.
+    for match_id in placed:
         index = shard_id(match_id, num_shards)
         name = shard_name(layer, index, num_shards)
         connection.execute(
             f"UPDATE matches SET {column} = ? WHERE match_id = ?",
             (name, match_id),
         )
-        updated += 1
 
     return {
         "shards_written": written,
-        "rows_repointed": updated,
+        "rows_repointed": len(placed),
         "superseded_assets": sorted(superseded),
         "pending_packs": list(pending_packs),
     }
@@ -350,17 +380,19 @@ def write_raw_pack(
 ) -> Tuple[Path, Dict[str, str]]:
     """Pack raw match directories into one archive.
 
-    Returns the archive path and the digest of each match's scorecard, so
-    the catalog can record what it holds.
+    Returns the archive path and the full-bundle digest of each match, so the
+    catalog records exactly what the archive holds: scorecard, every
+    commentary chunk and the fetch metadata.
     """
     members = collect_raw_members(raw_match_dirs)
     path = write_pack(out_path, LAYER_RAW, members)
+    grouped = members_by_match(LAYER_RAW, members)
     digests: Dict[str, str] = {}
     for match_id in raw_match_dirs:
-        scorecard = members.get(f"{match_id}/scorecard.json.gz")
-        if scorecard is None:
+        match_members = grouped.get(str(match_id)) or {}
+        if not has_payload(LAYER_RAW, str(match_id), match_members):
             continue
-        digests[match_id] = member_digest(scorecard)
+        digests[str(match_id)] = member_digest_for(LAYER_RAW, str(match_id), match_members)
     return path, digests
 
 

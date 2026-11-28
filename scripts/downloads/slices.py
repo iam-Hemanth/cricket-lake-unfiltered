@@ -50,6 +50,12 @@ def _matches(count: int) -> str:
     return f"{count} match" if count == 1 else f"{count} matches"
 
 
+def _since(value: str | None, cutoff: date) -> bool:
+    """Whether an ISO timestamp falls on or after a cutoff date."""
+    parsed = parse_iso(value)
+    return parsed is not None and parsed.date() >= cutoff
+
+
 def _add(slices: list[dict], *, sid: str, title: str, group: str, subgroup: str,
          description: str, filters: dict, ids: list[str], subgroup_order: int = 0) -> None:
     if not ids:
@@ -121,6 +127,32 @@ def build_slices(
                     description=f"First published in the lake · {level['label']} · {_matches(len(ids))}",
                     filters={"type": "added", "days": days, "gender": gender["id"], "level": level["id"]},
                     ids=ids, subgroup_order=days,
+                )
+
+    # -------------------------------------------------------------- recent updated
+    # A match is "updated" when it was first published or last rebuilt inside
+    # the window. Including newly added matches makes every updated slice a
+    # strict superset of its added counterpart, which lets a consumer sync on
+    # one slice alone.
+    for days in config.get("updated_days", []):
+        cutoff = _cutoff(now, days)
+        for gender in gender_defs:
+            for level in level_defs:
+                ids = [
+                    r["match_id"] for r in records
+                    if (_since(r.get("updated_at"), cutoff) or _since(r.get("published_at"), cutoff))
+                    and _gender_match(r, gender["filter"])
+                    and _level_match(r, level["filter"])
+                ]
+                _add(
+                    slices,
+                    sid=f"updated_{days}d_{gender['id']}_{level['id']}",
+                    title=f"Updated — last {days} days — {gender['label']}",
+                    group="Recent",
+                    subgroup=f"Updated — last {days} days",
+                    description=f"Added or rebuilt in the lake · {level['label']} · {_matches(len(ids))}",
+                    filters={"type": "updated", "days": days, "gender": gender["id"], "level": level["id"]},
+                    ids=ids, subgroup_order=2000 + days,
                 )
 
     # ------------------------------------------------------------------- formats

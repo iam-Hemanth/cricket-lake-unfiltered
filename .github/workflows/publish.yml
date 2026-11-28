@@ -2,16 +2,19 @@ name: Publish
 
 # Turn the catalog and the built layer into the published lake.
 #
-# This stage reads. It copies the built matches the catalog names, verifies
-# their digests, and writes the published snapshot: the master archive, the
-# match index, the download slices and the dated calendar. Nothing here
-# changes a match.
+# The publish job copies the built matches the catalog names, verifies their
+# digests, and uploads the master archive, the match index, the manifest and
+# the README to data-unfiltered-master. The download jobs then build the
+# slices and the Pages site from that published snapshot alone.
+#
+# The compaction runs before the publish, never beside it: both write the
+# lake, and a parallel run would race on the catalog.
 
 on:
   workflow_dispatch:
     inputs:
       compact:
-        description: "Fold the pending packs into the shards as well"
+        description: "Fold the pending packs into the shards first"
         required: false
         type: boolean
       prune:
@@ -19,6 +22,7 @@ on:
         required: false
         type: boolean
   schedule:
+    # 02:30 UTC sits midway between the 6-hourly ingest runs.
     - cron: "30 2 * * *"
 
 permissions:
@@ -29,44 +33,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Publish the snapshot
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      - name: Build the published snapshot
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python scripts/pipeline_publish.py \
-            --workdir publish_work \
-            --out published \
-            | tee publish_summary.json
-      - name: Build the master archive and the index
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python consolidate.py \
-            --input-dirs published/matches \
-            --output-dir published/master_matches \
-            --manifest-path published/lake_manifest.json \
-            --archive-path published/cricket_lake_unfiltered_master.tar.gz \
-            --published-only
-      - name: Upload the published snapshot
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload data-unfiltered-master \
-            published/cricket_lake_unfiltered_master.tar.gz \
-            published/matches_index.csv \
-            published/lake_manifest.json \
-            --repo ${{ github.repository }} --clobber
-
   compact:
     name: Compact the shards
     if: ${{ inputs.compact || github.event_name == 'schedule' }}
@@ -81,11 +47,279 @@ jobs:
       - name: Fold the packs into the shards
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PRUNE: ${{ inputs.prune && '1' || '' }}
+          # A scheduled compaction also prunes the packs it folded in, once
+          # the catalog that no longer names them is on the release.
+          PRUNE: ${{ (inputs.prune || github.event_name == 'schedule') && '1' || '' }}
         run: |
           EXTRA=""
           if [ -n "$PRUNE" ]; then EXTRA="$EXTRA --prune"; fi
           python scripts/pipeline_compact.py \
             --workdir compact_work \
+            --repo ${{ github.repository }} \
             --upload $EXTRA \
             | tee compact_summary.json
+
+  publish:
+    name: Publish the snapshot
+    needs: compact
+    if: ${{ always() && (needs.compact.result == 'success' || needs.compact.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Build and upload the published snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/pipeline_publish.py \
+            --workdir publish_work \
+            --repo ${{ github.repository }} \
+            --out published \
+            --upload \
+            | tee publish_summary.json
+
+  prepare:
+    name: Plan the download slices
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Ensure the slice release exists
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view download-slices --repo ${{ github.repository }} >/dev/null 2>&1 || \
+            gh release create download-slices \
+              --repo ${{ github.repository }} \
+              --title "Download slices (machine-managed)" \
+              --notes "Slice zips for the download catalog, written by publish.yml." \
+              --latest=false
+      - name: Download the published snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p artifacts
+          for name in cricket_lake_unfiltered_master.tar.gz matches_index.csv lake_manifest.json; do
+            gh release download data-unfiltered-master \
+              --repo ${{ github.repository }} \
+              --pattern "$name" --dir artifacts --clobber
+          done
+      - name: Normalize metadata and plan slices
+        run: |
+          python -m scripts.downloads.prepare \
+            --master-tar artifacts/cricket_lake_unfiltered_master.tar.gz \
+            --master-index artifacts/matches_index.csv \
+            --master-manifest artifacts/lake_manifest.json \
+            --config-dir downloads/config \
+            --workdir download_work \
+            --out download_plan
+      - name: Upload the plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: download-plan
+          path: |
+            download_plan
+          retention-days: 7
+      - name: Share the snapshot with the build jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-archives
+          path: artifacts/
+          retention-days: 1
+          compression-level: 0
+
+  build:
+    name: Build slice shard ${{ matrix.shard }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: download-plan
+          path: download_plan
+      - uses: actions/download-artifact@v4
+        with:
+          name: source-archives
+          path: artifacts
+      - name: Build the shard
+        run: |
+          python -m scripts.downloads.build_shard \
+            --plan-dir download_plan \
+            --shard ${{ matrix.shard }} \
+            --master-tar artifacts/cricket_lake_unfiltered_master.tar.gz \
+            --workdir download_work \
+            --out downloads_out
+      - name: Upload the slice zips
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          zips=(downloads_out/zips/*.zip)
+          if [ "${#zips[@]}" -eq 0 ]; then
+            echo "No zips in shard ${{ matrix.shard }}."
+            exit 0
+          fi
+          for attempt in $(seq 1 10); do
+            if gh release upload download-slices "${zips[@]}" \
+              --repo ${{ github.repository }} --clobber; then
+              break
+            fi
+            if [ "$attempt" -eq 10 ]; then
+              echo "::error::upload failed after 10 attempts"
+              exit 1
+            fi
+            sleep 60
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fragment-${{ matrix.shard }}
+          path: downloads_out/fragment_${{ matrix.shard }}.json
+          retention-days: 7
+
+  catalog:
+    name: Build the catalog page
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: download-plan
+          path: download_plan
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fragment-*
+          merge-multiple: true
+          path: fragments
+      - uses: actions/download-artifact@v4
+        with:
+          name: source-archives
+          path: artifacts
+      - name: Build the catalog
+        run: |
+          python -m scripts.downloads.catalog \
+            --plan-dir download_plan \
+            --fragments-dir fragments \
+            --template downloads/template.html \
+            --out catalog_out
+      - name: Build the calendar and per-match downloads
+        run: |
+          python -m scripts.downloads.calendar \
+            --plan-dir download_plan \
+            --master-tar artifacts/cricket_lake_unfiltered_master.tar.gz \
+            --fragments-dir fragments \
+            --out catalog_out
+      - name: Point the catalog links at the release
+        run: |
+          export BASE="https://github.com/${{ github.repository }}/releases/download/download-slices"
+          python3 - <<'PY'
+          import json, os
+          base = os.environ["BASE"]
+          path = "catalog_out/downloads.json"
+          data = json.load(open(path))
+
+          def walk(node):
+              if isinstance(node, dict):
+                  url = node.get("url")
+                  if isinstance(url, str) and url.startswith("zips/"):
+                      node["url"] = f"{base}/{url[len('zips/'):]}"
+                  for value in node.values():
+                      walk(value)
+              elif isinstance(node, list):
+                  for value in node:
+                      walk(value)
+
+          walk(data)
+          json.dump(data, open(path, "w"), indent=2)
+          for name in ("checksums.txt", "README.txt"):
+              target = os.path.join("catalog_out", name)
+              if not os.path.exists(target):
+                  continue
+              text = open(target).read()
+              text = text.replace("  zips/", f"  {base}/")
+              open(target, "w").write(text)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: catalog-html
+          path: catalog_out
+          retention-days: 7
+
+  pages:
+    name: Deploy the catalog
+    needs: catalog
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: catalog-html
+          path: catalog_out
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: catalog_out
+      - id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          # The per-match store is ~18k files and 275 MB; the default 10
+          # minutes timed out mid-sync.
+          timeout: 1200000
+
+  prune:
+    name: Prune stale slices
+    needs: pages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: catalog-html
+          path: catalog_out
+      - name: Delete slices the catalog no longer lists
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          jq -r '.groups[].subgroups[].slices[].id' catalog_out/downloads.json \
+            | sed 's/$/.zip/' | sort > wanted_zips.txt
+          gh api "repos/${{ github.repository }}/releases/tags/download-slices" \
+            --jq '.assets[] | "\(.id)\t\(.name)"' > assets.tsv || true
+          while IFS=$'\t' read -r id name; do
+            [ -z "$id" ] && continue
+            if ! grep -qxF "$name" wanted_zips.txt; then
+              echo "pruning $name"
+              gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$id"
+            fi
+          done < assets.tsv

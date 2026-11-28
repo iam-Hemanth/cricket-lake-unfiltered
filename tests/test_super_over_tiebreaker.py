@@ -7,7 +7,7 @@ carry scorecard lines only and no commentary deliveries.
 import unittest
 
 from src import constructor, validator
-from helpers import player
+from helpers import ball, player
 
 from scripts.scrape_schedule import normalize_schedule_match
 
@@ -143,6 +143,35 @@ def assert_valid(case, match, raw):
     schema = json.loads((Path(__file__).parents[1] / 'schema/schema.json').read_text())
     errors = list(Draft202012Validator(schema).iter_errors(match))
     case.assertEqual(errors, [], [e.message for e in errors])
+
+
+class ValidationTierGuardTests(unittest.TestCase):
+    """A scorecard-only Super Over must not excuse a broken regulation innings."""
+
+    def test_a_scorecard_only_super_over_does_not_excuse_a_broken_innings(self):
+        raw = details(
+            status_text='Match tied (A won the Super Over)',
+            lang_key='match_status_text_tied_tiebreaker_on_super_over',
+            tiebreaker_id=10, is_super_over=True,
+            super_overs=[_super_innings(3, 10, 'A', runs=1, wickets=2, balls=3)],
+        )
+        raw['content']['innings'][0].update(
+            runs=0, wickets=0, balls=1, penalties=0,
+            wides=0, noballs=0, byes=0, legbyes=0,
+        )
+        match, error = constructor.construct_match_v3(
+            'so', raw, {1: [ball()]}, {}, {}, {}
+        )
+        self.assertIsNone(error)
+        # The Super Over has no deliveries, but the regulation innings is
+        # fully covered, so the coverage-gap tier must not be available.
+        self.assertFalse(validator._scorecard_only_match(match))
+
+        # A structural contradiction in the match still fails it.
+        match['meta']['format'] = 'Test'
+        assessment = validator.assess_match(match, scorecard_innings(raw))
+        self.assertEqual(assessment.tier, "failed")
+        self.assertFalse(assessment.is_publishable)
 
 
 class SuperOverShapeTests(unittest.TestCase):

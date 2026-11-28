@@ -67,9 +67,14 @@ jobs:
         run: |
           EXTRA=""
           if [ -n "$FORCE_REFRESH" ]; then EXTRA="$EXTRA --force-refresh"; fi
-          if [ -n "$SINCE" ]; then EXTRA="$EXTRA --since $SINCE --discover"; fi
+          if [ -n "$SINCE" ]; then EXTRA="$EXTRA --since $SINCE"; fi
+          # Cron and ordinary runs always discover. Only an explicit
+          # match-id run with no since date skips discovery, so naming a few
+          # ids cannot silently pull in the whole schedule.
+          if [ -z "$MATCH_IDS" ] || [ -n "$SINCE" ]; then EXTRA="$EXTRA --discover"; fi
           python scripts/pipeline_ingest.py --plan \
             --workdir ingest_work \
+            --repo ${{ github.repository }} \
             --match-ids "$MATCH_IDS" \
             --max-matches "$MAX_MATCHES" $EXTRA \
             | tee plan_summary.json
@@ -116,6 +121,7 @@ jobs:
           python scripts/pipeline_ingest.py --worker \
             --chunk ${{ matrix.chunk }} \
             --workdir ingest_work \
+            --repo ${{ github.repository }} \
             --delay 0.6
       - name: Upload the raw payloads and the built matches
         uses: actions/upload-artifact@v4
@@ -151,7 +157,18 @@ jobs:
         run: |
           python scripts/pipeline_ingest.py --commit \
             --workdir ingest_work \
+            --repo ${{ github.repository }} \
             --upload | tee commit_summary.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          summary = json.load(open("commit_summary.json"))
+          print(f"has_built_changes={'true' if summary.get('has_built_changes') else 'false'}")
+          PY
+      - name: Publish the published snapshot
+        if: steps.commit.outputs.has_built_changes == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run publish.yml --repo ${{ github.repository }}
 
   schedule:
     name: Schedule feed
@@ -163,14 +180,28 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: pip install -r requirements.txt
+      - name: Ensure the schedule release exists
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view lake-schedule --repo ${{ github.repository }} >/dev/null 2>&1 || \
+            gh release create lake-schedule \
+              --repo ${{ github.repository }} \
+              --title "Series schedule (machine-managed)" \
+              --notes "The series schedule feed consumed by the apps. Written by ingest.yml." \
+              --latest=false
       - name: Refresh the series schedule
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AKAMAI_KEY: ${{ secrets.AKAMAI_KEY }}
-        run: python scripts/scrape_schedule.py --output schedule_feed.json
+        run: |
+          python scripts/scrape_schedule.py --days 60 \
+            --output data/series_schedule.json \
+            --summary data/schedule_summary.json
       - name: Upload the schedule feed
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload lake-schedule schedule_feed.json \
+          gh release upload lake-schedule \
+            data/series_schedule.json data/schedule_summary.json \
             --repo ${{ github.repository }} --clobber

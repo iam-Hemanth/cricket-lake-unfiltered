@@ -58,6 +58,18 @@ class ScorecardOnlyTierTests(unittest.TestCase):
         result = build_match("100", payload, {}, References())
         self.assertNotEqual(result.tier, "scorecard_only")
 
+    def test_a_zero_delivery_innings_does_not_excuse_a_structural_error(self):
+        """A contradiction elsewhere still fails, despite the coverage gap."""
+        result = build_match("100", _scorecard_only_payload(), {}, References())
+        self.assertEqual(result.tier, "scorecard_only")
+
+        # A source/classification contradiction is not a coverage-gap shape.
+        result.match["meta"]["format"] = "Test"
+        assessment = assess_match(result.match)
+        self.assertEqual(assessment.tier, "failed")
+        self.assertFalse(assessment.is_publishable)
+        self.assertIn("Source classification mismatch: format", assessment.errors)
+
     def test_the_tier_is_publishable(self):
         assessment = assess_match(
             build_match("100", _scorecard_only_payload(), {}, References()).match

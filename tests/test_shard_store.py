@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from src import catalog_db, shard_store
+from src.commentary import bundle_sha256, bundle_sha256_from_members
 
 
 class ShardStoreTests(unittest.TestCase):
@@ -80,7 +81,7 @@ class ShardStoreTests(unittest.TestCase):
         """Store one match's raw payload and point the catalog at it."""
         members = {f"{match_id}/scorecard.json.gz": payload}
         shard_store.write_pack(self.archives / archive, shard_store.LAYER_RAW, members)
-        digest = shard_store.member_digest(payload)
+        digest = bundle_sha256_from_members(members, match_id)
         catalog_db.upsert_match(
             self.connection, match_id,
             raw_available=1, raw_archive=archive, raw_sha256=digest,
@@ -95,7 +96,7 @@ class ShardStoreTests(unittest.TestCase):
         }
         shard_store.write_pack(self.archives / archive, shard_store.LAYER_RAW, members)
         for match_id in match_ids:
-            digest = shard_store.member_digest(payloads[match_id])
+            digest = bundle_sha256_from_members(members, match_id)
             catalog_db.upsert_match(
                 self.connection, match_id,
                 raw_available=1, raw_archive=archive, raw_sha256=digest,
@@ -177,6 +178,74 @@ class ShardStoreTests(unittest.TestCase):
         self.assertEqual(result["extracted"], ["100"])
         self.assertFalse((self.root / "out" / "101").exists())
 
+    # -- the full raw bundle ---------------------------------------------
+
+    def test_a_raw_bundle_round_trips_through_pack_and_compaction(self):
+        """Scorecard, every commentary chunk and the metadata all survive."""
+        raw_dir = self.root / "raw" / "100"
+        raw_dir.mkdir(parents=True)
+        payloads = {
+            "scorecard.json.gz": b'{"content": {"innings": []}}',
+            "commentary_inn1_chunk0.json.gz": b'{"comments": [1]}',
+            "commentary_inn1_chunk1.json.gz": b'{"comments": [2]}',
+            "commentary_super0_chunk0.json.gz": b'{"comments": [3]}',
+        }
+        for name, payload in payloads.items():
+            with gzip.open(raw_dir / name, "wb") as handle:
+                handle.write(payload)
+        (raw_dir / "fetch_meta.json").write_bytes(b'{"match_id": "100"}')
+        (raw_dir / "meta.json").write_bytes(b'{"scorecard.json": {}}')
+
+        expected = bundle_sha256(raw_dir)
+        pack_path, digests = shard_store.write_raw_pack(
+            self.archives / "raw_pack_1.tar.gz", {"100": raw_dir}
+        )
+        self.assertEqual(digests["100"], expected)
+        members = shard_store.read_pack(pack_path)
+        self.assertEqual(len(members), 6)
+        self.assertEqual(bundle_sha256_from_members(members, "100"), expected)
+
+        catalog_db.upsert_match(
+            self.connection, "100",
+            raw_available=1, raw_archive="raw_pack_1.tar.gz", raw_sha256=expected,
+            validation_tier="clean", maturity_state="settled",
+        )
+        recovered = self.root / "recovered"
+        outcome = shard_store.materialize_from_catalog(
+            self.connection, ["100"], self.archives, recovered, shard_store.LAYER_RAW
+        )
+        self.assertEqual(outcome["extracted"], ["100"])
+        for name, payload in payloads.items():
+            with gzip.open(recovered / "100" / name, "rb") as handle:
+                self.assertEqual(handle.read(), payload)
+        self.assertEqual(
+            (recovered / "100" / "fetch_meta.json").read_bytes(),
+            (raw_dir / "fetch_meta.json").read_bytes(),
+        )
+        self.assertEqual(
+            (recovered / "100" / "meta.json").read_bytes(),
+            (raw_dir / "meta.json").read_bytes(),
+        )
+        self.assertEqual(bundle_sha256(recovered / "100"), expected)
+
+        compacted = self.root / "compacted"
+        shard_store.compact_shards(
+            self.connection, shard_store.LAYER_RAW, self.archives,
+            compacted, ["raw_pack_1.tar.gz"],
+        )
+        row = catalog_db.get_match(self.connection, "100")
+        self.assertTrue(row["raw_archive"].startswith("raw_shard_"))
+        shard_members = shard_store.read_pack(compacted / row["raw_archive"])
+        self.assertEqual(len(shard_members), 6)
+        self.assertEqual(bundle_sha256_from_members(shard_members, "100"), expected)
+
+        recovered_again = self.root / "recovered_again"
+        outcome = shard_store.materialize_from_catalog(
+            self.connection, ["100"], compacted, recovered_again, shard_store.LAYER_RAW
+        )
+        self.assertEqual(outcome["extracted"], ["100"])
+        self.assertEqual(bundle_sha256(recovered_again / "100"), expected)
+
     # -- compaction -------------------------------------------------------
 
     def test_compaction_folds_a_pack_into_the_shards(self):
@@ -207,9 +276,10 @@ class ShardStoreTests(unittest.TestCase):
             self.archives / shard_name, shard_store.LAYER_RAW,
             {"100/scorecard.json.gz": b"current"},
         )
+        current_members = {"100/scorecard.json.gz": b"current"}
         catalog_db.upsert_match(
             self.connection, "100", raw_available=1, raw_archive=shard_name,
-            raw_sha256=shard_store.member_digest(b"current"),
+            raw_sha256=bundle_sha256_from_members(current_members, "100"),
             validation_tier="clean", maturity_state="settled",
         )
         # A pack holds a stale copy of the same match.
@@ -238,8 +308,9 @@ class ShardStoreTests(unittest.TestCase):
             self.assertIn(expected, result["shards_written"])
 
     def test_compaction_updates_every_repointed_row(self):
-        self._seed_raw("100", b"payload-100")
-        self._seed_raw("101", b"payload-101")
+        self._seed_raw_pack(
+            ["100", "101"], {"100": b"payload-100", "101": b"payload-101"},
+        )
         result = shard_store.compact_shards(
             self.connection, shard_store.LAYER_RAW, self.archives,
             self.root / "shards", ["raw_pack_1.tar.gz"],

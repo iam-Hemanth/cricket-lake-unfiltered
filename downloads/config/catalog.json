@@ -11,6 +11,10 @@
     30,
     365
   ],
+  "updated_days": [
+    7,
+    30
+  ],
   "genders": [
     {
       "id": "all",

@@ -30,7 +30,7 @@ from src import catalog_db, release_store, shard_store  # noqa: E402
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
+    handlers=[logging.StreamHandler(sys.stderr)],
 )
 logger = logging.getLogger("compact")
 
@@ -69,9 +69,19 @@ def main() -> int:
     archive_dir.mkdir(parents=True, exist_ok=True)
 
     catalog_path = Path(args.catalog) if args.catalog else workdir / "lake_catalog.sqlite.gz"
+    catalog_updated_at = None
     if catalog_path.exists():
         connection = catalog_db.load_catalog_gz(catalog_path)
+        if args.catalog is None:
+            asset = release_store.find_asset(
+                args.repo, release_store.RELEASE_CATALOG, "lake_catalog.sqlite.gz"
+            )
+            catalog_updated_at = asset.get("updated_at") if asset else None
     else:
+        asset = release_store.find_asset(
+            args.repo, release_store.RELEASE_CATALOG, "lake_catalog.sqlite.gz"
+        )
+        catalog_updated_at = asset.get("updated_at") if asset else None
         release_store.download_asset(
             args.repo, release_store.RELEASE_CATALOG, "lake_catalog.sqlite.gz", workdir
         )
@@ -79,10 +89,33 @@ def main() -> int:
 
     layers = ["raw", "built"] if args.layer == "both" else [args.layer]
     report: Dict[str, Any] = {}
+    prune_candidates: Dict[str, List[str]] = {}
 
     for layer in layers:
         release = release_store.RELEASE_RAW if layer == "raw" else release_store.RELEASE_BUILT
-        packs = pending_packs(archive_dir, layer)
+        prefix = f"{layer}_pack_"
+
+        # The packs that need folding are the ones on the release, the ones
+        # already staged locally, and the ones the catalog still names. The
+        # old version looked only at the local directory, which is empty on
+        # a fresh CI runner, so it always found nothing to compact.
+        try:
+            remote_assets = release_store.list_assets(args.repo, release)
+        except Exception as exc:
+            logger.warning("Could not list %s: %s", release, exc)
+            remote_assets = []
+        remote_packs = {
+            str(asset["name"]) for asset in remote_assets
+            if str(asset.get("name", "")).startswith(prefix)
+            and str(asset.get("name", "")).endswith(".tar.gz")
+        }
+        catalog_packs = {
+            str(row["archive"]) for row in connection.execute(
+                f"SELECT DISTINCT {layer}_archive AS archive FROM matches"
+                f" WHERE {layer}_archive IS NOT NULL AND {layer}_archive LIKE '{prefix}%'"
+            )
+        }
+        packs = sorted(set(pending_packs(archive_dir, layer)) | remote_packs | catalog_packs)
         if not packs and not args.force:
             report[layer] = {"packs": 0, "skipped": "no pending packs"}
             continue
@@ -90,27 +123,21 @@ def main() -> int:
             report[layer] = {"packs": len(packs), "skipped": "below the threshold"}
             continue
 
-        # The shards the catalog names are downloaded first, because the
-        # compaction reads the members that are already in them.
-        for row in connection.execute(
-            f"SELECT DISTINCT {layer}_archive AS archive FROM matches"
-            f" WHERE {layer}_archive IS NOT NULL AND {layer}_archive LIKE '{layer}_shard_%'"
-        ):
-            name = str(row["archive"])
+        # The shards listed on the release plus the pending packs are the
+        # only archives the compaction needs.
+        shard_names = sorted(
+            str(asset["name"]) for asset in remote_assets
+            if str(asset.get("name", "")).startswith(f"{layer}_shard_")
+            and str(asset.get("name", "")).endswith(".tar.gz")
+        )
+        for name in shard_names + packs:
             target = archive_dir / name
-            if not target.exists():
-                try:
-                    release_store.download_asset(args.repo, release, name, archive_dir)
-                except Exception as exc:
-                    logger.warning("Could not download %s: %s", name, exc)
-
-        for name in packs:
-            target = archive_dir / name
-            if not target.exists():
-                try:
-                    release_store.download_asset(args.repo, release, name, archive_dir)
-                except Exception as exc:
-                    logger.warning("Could not download %s: %s", name, exc)
+            if target.exists():
+                continue
+            try:
+                release_store.download_asset(args.repo, release, name, archive_dir)
+            except Exception as exc:
+                logger.warning("Could not download %s: %s", name, exc)
 
         outcome = shard_store.compact_shards(
             connection, layer, archive_dir, archive_dir, packs
@@ -120,21 +147,50 @@ def main() -> int:
         if args.upload:
             for name in outcome["shards_written"]:
                 release_store.upload_asset(args.repo, release, archive_dir / name)
-        if args.prune:
-            for name in packs:
-                release_store.delete_asset(args.repo, release, name)
 
+        prune_candidates[layer] = packs
         report[layer] = {
             "packs": len(packs),
             "shards_written": outcome["shards_written"],
             "rows_repointed": outcome["rows_repointed"],
         }
 
+    summary = {"layers": report}
+    catalog_db.record_run(
+        connection, f"compact-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+        "compact", finished_at=datetime.now(timezone.utc).isoformat(), summary=summary,
+    )
     catalog_db.save_catalog_gz(connection, workdir / "lake_catalog.sqlite.gz")
+
+    catalog_uploaded = False
     if args.upload:
         release_store.upload_asset(
-            args.repo, release_store.RELEASE_CATALOG, workdir / "lake_catalog.sqlite.gz"
+            args.repo, release_store.RELEASE_CATALOG,
+            workdir / "lake_catalog.sqlite.gz",
+            expected_updated_at=catalog_updated_at,
         )
+        catalog_uploaded = True
+
+    # Deleting a pack is only safe after the catalog that no longer names it
+    # is on the release. A pack a row still references is never deleted.
+    if args.prune and not catalog_uploaded:
+        logger.warning("--prune needs a successful --upload; nothing is pruned")
+    elif args.prune:
+        for layer, packs in prune_candidates.items():
+            release = release_store.RELEASE_RAW if layer == "raw" else release_store.RELEASE_BUILT
+            referenced = {
+                str(row["archive"]) for row in connection.execute(
+                    f"SELECT DISTINCT {layer}_archive AS archive FROM matches"
+                    f" WHERE {layer}_archive IS NOT NULL AND {layer}_archive LIKE '{layer}_pack_%'"
+                )
+            }
+            pruned = []
+            for name in packs:
+                if name in referenced:
+                    continue
+                if release_store.delete_asset(args.repo, release, name):
+                    pruned.append(name)
+            report[layer]["pruned"] = pruned
 
     print(json.dumps(report, indent=2))
     connection.close()
