@@ -19,10 +19,6 @@ WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
 #: The only workflows this repository may contain.
 APPROVED_WORKFLOWS = {"ingest.yml", "reparse.yml", "publish.yml", "ci.yml"}
 
-#: The one-time migration workflow. It exists only while the lake is moved
-#: behind the catalog, and it is removed once that is done.
-TEMPORARY_WORKFLOWS = {"migrate.yml"}
-
 #: Directories that must not exist: they were how work used to be parked.
 FORBIDDEN_DIRECTORIES = ["queues", "corrections"]
 
@@ -82,23 +78,11 @@ class WorkflowSetTests(unittest.TestCase):
             self.skipTest("No workflows directory")
         found = {path.name for path in WORKFLOWS_DIR.glob("*.yml")}
         found |= {path.name for path in WORKFLOWS_DIR.glob("*.yaml")}
-        extra = found - APPROVED_WORKFLOWS - TEMPORARY_WORKFLOWS
+        extra = found - APPROVED_WORKFLOWS
         self.assertEqual(
             extra, set(),
             f"Unexpected workflows: {sorted(extra)}. "
             f"Only {sorted(APPROVED_WORKFLOWS)} are allowed.",
-        )
-
-    def test_the_migration_workflow_is_the_only_temporary_one(self):
-        """The migration workflow is removed once the lake has been moved."""
-        if not WORKFLOWS_DIR.exists():
-            self.skipTest("No workflows directory")
-        found = {path.name for path in WORKFLOWS_DIR.glob("*.yml")}
-        found |= {path.name for path in WORKFLOWS_DIR.glob("*.yaml")}
-        temporary = found & TEMPORARY_WORKFLOWS
-        self.assertTrue(
-            temporary <= TEMPORARY_WORKFLOWS,
-            "An unexpected workflow is in the temporary set.",
         )
 
     def test_every_approved_workflow_exists(self):

@@ -203,20 +203,30 @@ The lake was moved behind the catalog on 28 November 2026. What it produced:
 |---|---|
 | Raw batch assets read | 83 (59 local, 24 from the external `cricket-extractor` repository) |
 | Matches rebuilt | 18,663, from the stored raw payloads, offline |
+| Raw bundles packed | 18,657: six scorecards were corrupt (`1417822`, `1496587`, `1496589`, `1525655`, `1530204`, `1552777`), so their built matches are kept as `legacy_unbacked` |
 | Shards | 64 `raw_shard_NN` + 64 `built_shard_NN`, 2.2 GB, largest shard 36.6 MB |
 | Catalog | 19,348 rows, 3 MB |
-| Published matches lost | **0** |
+| Published matches lost | **0 absent**; `1120137` now fails validation on contradictory source data and is not republished |
 
-The catalog holds 19,348 rows for 18,663 rebuilt matches: the extra 685 are
-the published matches that were never given a raw payload. They are recorded
-as `legacy_unbacked` and stay published. A targeted `ingest --match-ids` pass
-gives them a raw payload and turns them into ordinary rows.
+The catalog holds 19,348 rows: 18,657 have a raw payload and 691 are
+`legacy_unbacked`. Of those, 685 were published matches that were never
+fetched raw; six are rebuilt matches whose only scorecard was corrupt. They
+stay published and a targeted `ingest --match-ids` pass gives them a raw
+payload and turns them into ordinary rows.
+
+The rebuild reclassified the legacy schema-3.0.0 records: 15,216 `clean`,
+1,288 `warning`, 1,182 `scorecard_only`, 899 `coverage_gap`, 716 `source_gap`
+and 47 `failed`. The 46 failed rows that were never published stay excluded.
+`1120137` was in the published lake, but its scorecard-only first innings
+does not excuse the excess deliveries in its other innings, so it is
+disclosed as failed rather than republished.
 
 The 661 matches the migrated lake has and the published lake did not are
 matches the raw batches held but that had never been published.
 
-The migration workflow (`migrate.yml`) is temporary and should be removed
-once nothing more needs migrating.
+The migration workflow and `scripts/migrate_to_catalog.py` were retired on
+28 November 2026 after this run. All future data work goes through
+`ingest.yml`, `reparse.yml` and `publish.yml`.
 
 ## Where things are
 

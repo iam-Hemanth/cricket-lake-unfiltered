@@ -111,9 +111,7 @@ every pull request. A change that breaks one of them will fail CI.
   provisional. The next run picks it up.
 - **No new one-off `.github/workflows/*.yml` repair, backfill or patch
   workflows.** All data runs go through `ingest.yml`, `reparse.yml` and
-  `publish.yml` on `main`. The one exception is `migrate.yml`, which exists
-  only while the lake is being moved behind the catalog; it is removed once
-  that is done.
+  `publish.yml` on `main`.
 - **No push-triggered data workflows on side branches** (for example
   `repair/*`). `main` is the single operational branch.
 - **No discarding of raw payloads on any fetch path.** `raw_available` must
