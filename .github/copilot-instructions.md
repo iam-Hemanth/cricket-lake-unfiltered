@@ -13,16 +13,19 @@ python scripts/inspect_catalog.py --summary
 python scripts/inspect_catalog.py --match-ids <ids>
 ```
 
-**Never re-scrape to fix a parser bug.** The raw payload of every fetch is
-stored, and the lake is rebuilt from those payloads. A parser change is
-fixed in code, then applied with `reparse.yml`, which runs offline.
+**Never re-scrape or recreate the catalog from scratch to fix a parser bug or
+add new fields from existing raw data.** The raw payload of every fetch is
+stored in `lake-raw`, and the lake is rebuilt offline from those payloads. Edit
+the parser + bump `PARSER_VERSION`, then run `reparse.yml` (updates existing
+matches in place in the catalog and auto-publishes; all future `ingest.yml`
+matches automatically inherit the change via `build_match()`).
 
 ## The four cases
 
 | Case | Symptom | Action |
 |---|---|---|
 | A | Not in the catalog | `ingest.yml`. No queue file. |
-| B | Raw exists, output wrong | Fix the parser, bump `PARSER_VERSION`, write a test, run `reparse.yml` |
+| B | Raw exists, output wrong or needs new fields already in raw | Edit parser (`src/constructor.py` / `src/stage.py` / `src/builder.py`), bump `PARSER_VERSION`, write a test, run `reparse.yml` offline |
 | C | `provisional`, recent | Wait for the scheduled refresh, or dispatch `ingest.yml --force_refresh` |
 | D | `source_gap` / `settled_incomplete` / quarantined | Leave it. The source contradicts itself. |
 

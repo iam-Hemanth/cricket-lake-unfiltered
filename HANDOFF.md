@@ -88,6 +88,32 @@ python scripts/pipeline_publish.py --workdir publish_work --out published
 python scripts/pipeline_compact.py --workdir compact_work --upload
 ```
 
+## Adding new fields or changing match JSONs
+
+**Never re-fetch from ESPN and never recreate `lake_catalog.sqlite.gz` from
+scratch when you want new/extra fields in the match JSONs.**
+
+1. **Check `lake-raw` first.** If ESPN already returned the data inside
+   `<match_id>/scorecard.json.gz` or commentary chunks, it is already saved in
+   `lake-raw`.
+2. **Edit the single parser and bump `PARSER_VERSION`.** Change
+   `src/constructor.py`, `src/stage.py`, `src/validator.py`, or `src/builder.py`,
+   increment `PARSER_VERSION` in `src/builder.py`, add a fixture test under
+   `tests/fixtures/`, and push to `main` after `.venv/bin/python -m pytest -q`
+   passes.
+3. **Run `reparse.yml` offline.** It reads `lake_catalog.sqlite.gz`, finds all
+   rows whose `parser_version` is behind `PARSER_VERSION`, rebuilds their JSONs
+   purely offline from `lake-raw`, updates those rows in place in the existing
+   catalog, and dispatches `publish.yml` (which updates `data-unfiltered-master`
+   and `download-slices/updated_30d_male_all.zip` for downstream sync).
+4. **Future matches get it automatically.** `ingest.yml` calls the exact same
+   `src/builder.py:build_match()`, so every newly fetched match emits the new
+   fields without any second edit or backfill.
+5. **Exceptions:** If telemetry/awards were simply not published yet on a `<14`-day
+   match, wait for `provisional` auto-refresh in `ingest.yml`. Only change
+   `src/commentary.py` + `ingest.yml` if a genuinely **new ESPN API endpoint**
+   that was never captured in `lake-raw` is required going forward.
+
 ## The published snapshot
 
 `publish.yml` builds one snapshot from the catalog: the built matches the

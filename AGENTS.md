@@ -62,20 +62,28 @@ whether it is waiting for a refresh.
 It was never fetched. Trigger `ingest.yml` (with `match_ids` if you know
 them, or wait for the 6-hourly cron). **Do not create a queue file in git.**
 
-**Case B — the raw payload exists (`raw_available = 1`) but the output JSON
-is wrong or missing fields.**
-This is a **parser bug, not a fetch problem.**
+**Case B — the raw payload exists (`raw_available = 1`) and either the
+output JSON is wrong, or you want to extract new/extra fields already
+present in the stored ESPN payload.**
+This is a **parser change, not a fetch problem.**
 
-1. Save a minimal raw fixture under `tests/fixtures/` and write a failing
-   test.
-2. Fix the code (`src/constructor.py`, `src/stage.py`, `src/validator.py`,
-   `src/builder.py`).
-3. Bump `PARSER_VERSION` in `src/builder.py`.
-4. Run `pytest` locally, merge to `main`, then run **`reparse.yml`**, which
-   is 100% offline.
+1. Inspect a stored raw bundle from `lake-raw` (`scorecard.json.gz`,
+   commentary chunks) to confirm ESPN already sent the data, and save a
+   minimal raw fixture under `tests/fixtures/` with a failing test.
+2. Edit the single shared parser (`src/constructor.py`, `src/stage.py`,
+   `src/validator.py`, `src/builder.py`).
+3. Bump `PARSER_VERSION` in `src/builder.py` (so stale built rows are
+   detected automatically in the existing catalog).
+4. Run `pytest` locally, push/merge to `main`, then run **`reparse.yml`**,
+   which is 100% offline.
 
-**Never re-fetch from ESPN to fix a parser bug.** The raw payload already
-holds everything that was published. Re-fetching only risks losing it.
+**Never re-fetch from ESPN and never recreate `lake_catalog.sqlite.gz` from
+scratch to fix a bug or add new fields.** Both **existing** matches (updated
+in place in the existing catalog by `reparse.yml` from `lake-raw`, then
+auto-published via `publish.yml`) and **future** matches (built by the exact
+same `src/builder.py:build_match()` inside `ingest.yml`) get the change from
+this single edit. Only touch `src/commentary.py` + `ingest.yml` if a brand-new
+unfetched ESPN API endpoint must be captured going forward.
 
 **Case C — the raw payload exists, the match finished recently (under 14
 days), and ESPN had not published the telemetry or awards yet
@@ -97,7 +105,7 @@ correct outcome.
 | Situation | Action |
 |---|---|
 | New matches to fetch | `ingest.yml` (`workflow_dispatch`, or the cron) |
-| Parser changed | `reparse.yml` (offline, no network) |
+| Parser changed or new fields added from stored raw payloads | Edit parser + bump `PARSER_VERSION` → `reparse.yml` (offline, updates existing catalog in place; future `ingest.yml` runs get it via `build_match()`) |
 | New built matches to publish | `publish.yml` |
 | Too many packs in a release | `publish.yml` (it runs `compact`) |
 
