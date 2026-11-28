@@ -187,10 +187,14 @@ def build_plan(
 
 
 def _chunk_count(total: int) -> int:
-    """How many chunks the plan is split into."""
+    """How many chunks the plan is split into.
+
+    Four matches per worker keeps one slow match from holding a large chunk
+    for the whole run, while staying well inside GitHub's matrix job limit.
+    """
     if total <= 0:
         return 1
-    return max(1, min(20, (total + 19) // 20))
+    return max(1, min(200, (total + 3) // 4))
 
 
 def _open_remote_catalog(

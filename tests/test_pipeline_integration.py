@@ -249,7 +249,7 @@ class PipelineIntegrationTests(unittest.TestCase):
         from scripts.pipeline_ingest import build_plan
 
         connection = catalog_db.open_catalog(self.root / "lake_catalog.sqlite")
-        for total in (50, 321):
+        for total in (50, 321, 691):
             ids = [str(900000 + index) for index in range(total)]
             plan = build_plan(connection, [], [], ids, total, NOW)
             assigned = [
@@ -260,6 +260,10 @@ class PipelineIntegrationTests(unittest.TestCase):
             self.assertEqual(plan["total_selected"], total)
             self.assertEqual(len(assigned), total)
             self.assertEqual(sorted(assigned), sorted(ids))
+            self.assertEqual(len(plan["chunks"]), (total + 3) // 4)
+            self.assertLessEqual(
+                max(len(chunk["match_ids"]) for chunk in plan["chunks"]), 4
+            )
 
 
 class IngestCommitTests(unittest.TestCase):
