@@ -237,10 +237,11 @@ The migration stamped all 18,657 rebuilt matches with its own build instant,
 Those 18,657 rows were corrected once in `lake_catalog.sqlite.gz`: `built_at`
 was reset to each match's raw fetch time. The backfill rows, built later by
 `ingest.yml`, were not touched. The 30-day update selection fell from 19,299
-to 730 matches: the 688 backfill builds, 41 migration rows whose raw was
-fetched inside the window, and recent first publications. `built_at` keeps
-its normal meaning from here, so a later `reparse.yml` rebuild still moves it
-and a parser fix remains in the update feed.
+to 730 matches: the 688 rows the raw backfill built, plus 42 rows rebuilt or
+fetched inside the window. The migration's 18,657 format-only rebuilds left
+the feed. `built_at` keeps its normal meaning from here, so a later
+`reparse.yml` rebuild still moves it and a parser fix remains in the update
+feed.
 
 ## The legacy raw backfill (done 28 November 2026)
 
