@@ -248,6 +248,12 @@ The correction is in the catalog; the next `publish.yml` rewrites
 re-bundled raw layer (as this migration did) has to seed from the full
 archive, because the corrected update feed no longer carries that epoch.
 
+The correction was verified end to end by the 12:30 UTC publish. The catalog
+window held 730 publishable rows after the correction and 785 after the
+12:00 UTC ingest added 56 matches (624 male, 114 female, 47 unknown). The
+male-only `updated_30d_male_all.zip` was rebuilt at 12:30 UTC with 624
+matches and 13.5 MB, down from 434.7 MB.
+
 ## The legacy raw backfill (done 28 November 2026)
 
 All 691 `legacy_unbacked` matches were fetched once through the standard
