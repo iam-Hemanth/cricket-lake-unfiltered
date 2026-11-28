@@ -243,6 +243,11 @@ the feed. `built_at` keeps its normal meaning from here, so a later
 `reparse.yml` rebuild still moves it and a parser fix remains in the update
 feed.
 
+The correction is in the catalog; the next `publish.yml` rewrites
+`matches_index.csv` and the update slices. A consumer that must reconcile a
+re-bundled raw layer (as this migration did) has to seed from the full
+archive, because the corrected update feed no longer carries that epoch.
+
 ## The legacy raw backfill (done 28 November 2026)
 
 All 691 `legacy_unbacked` matches were fetched once through the standard
