@@ -169,8 +169,9 @@ def build_plan(
         refresh_attempts[str(match_id)] = int(row["fetch_attempts"] or 0) if row is not None else 0
 
     chunks = []
-    chunk_size = max(1, len(selected) // max(1, _chunk_count(len(selected))) or 1)
-    for index in range(_chunk_count(len(selected))):
+    chunk_count = _chunk_count(len(selected))
+    chunk_size = max(1, (len(selected) + chunk_count - 1) // chunk_count) if selected else 1
+    for index in range(chunk_count):
         part = selected[index * chunk_size:(index + 1) * chunk_size]
         if part:
             chunks.append({"chunk": index, "match_ids": part})

@@ -268,6 +268,17 @@ class PipelineWorkflowContractTests(unittest.TestCase):
         for token in ("--upload", "has_changes", "gh workflow run publish.yml"):
             self.assertIn(token, text, f"reparse.yml does not mention {token!r}.")
 
+    def test_a_workflow_that_dispatches_publish_may_write_actions(self):
+        """`gh workflow run` is an Actions write, not a contents write."""
+        import yaml
+        for name in ("ingest.yml", "reparse.yml"):
+            document = yaml.safe_load(self._text(name))
+            permissions = document.get("permissions") or {}
+            self.assertEqual(
+                permissions.get("actions"), "write",
+                f"{name} dispatches publish but cannot write Actions.",
+            )
+
     def test_publish_compacts_before_it_publishes(self):
         """Compaction and the snapshot both write the catalog; never in parallel."""
         import yaml

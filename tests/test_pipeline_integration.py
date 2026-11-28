@@ -244,6 +244,23 @@ class PipelineIntegrationTests(unittest.TestCase):
         self.assertEqual(plan["deferred_ids"], ["3"])
         self.assertIsNone(catalog_db.get_match(connection, "3"))
 
+    def test_every_selected_match_reaches_exactly_one_chunk(self):
+        """Splitting into chunks must not drop the remainder."""
+        from scripts.pipeline_ingest import build_plan
+
+        connection = catalog_db.open_catalog(self.root / "lake_catalog.sqlite")
+        for total in (50, 321):
+            ids = [str(900000 + index) for index in range(total)]
+            plan = build_plan(connection, [], [], ids, total, NOW)
+            assigned = [
+                match_id
+                for chunk in plan["chunks"]
+                for match_id in chunk["match_ids"]
+            ]
+            self.assertEqual(plan["total_selected"], total)
+            self.assertEqual(len(assigned), total)
+            self.assertEqual(sorted(assigned), sorted(ids))
+
 
 class IngestCommitTests(unittest.TestCase):
     """The commit step must run, not just import."""
