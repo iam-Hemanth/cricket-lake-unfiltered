@@ -17,13 +17,8 @@
   ],
   "genders": [
     {
-      "id": "all",
-      "label": "All matches",
-      "filter": "all"
-    },
-    {
       "id": "male",
-      "label": "Men",
+      "label": "All matches",
       "filter": "male"
     }
   ],

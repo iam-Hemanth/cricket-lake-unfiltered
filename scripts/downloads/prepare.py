@@ -93,6 +93,14 @@ def main() -> int:
         row = record_from_match_json(mid, path)
         records[mid] = enrich(row, comps, teams, recovery, recovery)
 
+    # The download catalog is men's matches only. The lake itself stays
+    # unfiltered; the consumer-facing slices and index carry no women's
+    # records.
+    records = {
+        mid: row for mid, row in records.items()
+        if (row.get("gender") or "") == "male"
+    }
+
     ordered = sorted(
         records.values(),
         key=lambda r: (r.get("date") or "9999", str(r.get("match_id"))),
@@ -155,8 +163,7 @@ def main() -> int:
         "group_descriptions": GROUP_DESCRIPTIONS,
         "notes": [
             *validation_notes,
-            "Men-only slices are listed separately; all-match slices include the small women's set.",
-            "All-match slices include the small women's set; women's-only slices are withheld for v1 until the T2 backfill is run.",
+            "The download catalog covers men's matches only.",
             "Played windows use the first date in meta.dates; multi-day matches are counted from their start date.",
         ],
     }

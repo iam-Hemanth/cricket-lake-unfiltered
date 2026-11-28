@@ -406,7 +406,7 @@ class DownloadSlicePackagingTests(unittest.TestCase):
             work = Path(tmp)
             matches_dir = work / "master_matches"
             matches_dir.mkdir()
-            for match_id in ("100", "200"):
+            for match_id in ("100", "200", "300"):
                 result = build_match(
                     match_id, _recent_details(), {1: [ball()]}, References(),
                 )
@@ -428,7 +428,9 @@ class DownloadSlicePackagingTests(unittest.TestCase):
                 "100,2026-11-28,T20I,T20I,3.3.0,male,IPL,India,Australia,"
                 "international,clean,2026-11-28T00:00:00+00:00,2026-11-28T00:00:00+00:00\n"
                 "200,2024-01-01,T20I,T20I,3.3.0,male,IPL,India,Australia,"
-                "international,clean,2024-01-01T00:00:00+00:00,2026-11-27T00:00:00+00:00\n",
+                "international,clean,2024-01-01T00:00:00+00:00,2026-11-27T00:00:00+00:00\n"
+                "300,2026-11-28,T20I,T20I,3.3.0,female,IPL,India,Australia,"
+                "international,clean,2026-11-28T00:00:00+00:00,2026-11-28T00:00:00+00:00\n",
                 encoding="utf-8",
             )
 

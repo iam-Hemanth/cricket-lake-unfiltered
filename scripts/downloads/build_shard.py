@@ -51,8 +51,7 @@ NOTES
     multi-day matches). Added windows use the date a match entered the lake.
   * The original 16.4k backfill predates the incremental feed, so older matches
     do not appear in the "added" windows.
-  * All-match slices include the small women's set. Women's-only slices are
-    withheld for v1 until the T2 backfill is run.
+  * The download catalog covers men's matches only.
   * Source: ESPNcricinfo match pages via cricket-lake-unfiltered.
 
 Verify this archive with the sha256 in the catalog's checksums.txt.

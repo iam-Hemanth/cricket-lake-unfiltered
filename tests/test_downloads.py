@@ -82,9 +82,11 @@ class SliceTests(unittest.TestCase):
         slices, shards = build_slices(records, self.comps, self.teams, self.config,
                                       datetime(2026, 10, 26, 12, tzinfo=timezone.utc))
         ids = {item["id"] for item in slices}
-        self.assertIn("played_2d_all_all", ids)
         self.assertIn("played_2d_male_all", ids)
+        self.assertNotIn("played_2d_all_all", ids)
         self.assertNotIn("played_2d_female_all", ids)
+        assigned_matches = {mid for item in slices for mid in item["ids"]}
+        self.assertNotIn("3", assigned_matches)
         self.assertEqual(len(shards), 20)
         assigned = [sid for shard in shards for sid in shard["slice_ids"]]
         self.assertEqual(sorted(assigned), sorted(ids))

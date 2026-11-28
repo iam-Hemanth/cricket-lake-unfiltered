@@ -84,6 +84,14 @@ def build_slices(
     gender_defs = config["genders"]
     level_defs = config["levels"]
 
+    # The download catalog is men's matches only. Enforcing it here as well
+    # as in prepare keeps every slice, including the gender-agnostic team
+    # and country ones, free of women's records.
+    records = [
+        record for record in records
+        if (record.get("gender") or "") == "male"
+    ]
+
     # --------------------------------------------------------------- recent played
     today = now.date()
     for days in config["played_days"]:
