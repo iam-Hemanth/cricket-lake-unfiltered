@@ -228,6 +228,20 @@ The migration workflow and `scripts/migrate_to_catalog.py` were retired on
 28 November 2026 after this run. All future data work goes through
 `ingest.yml`, `reparse.yml` and `publish.yml`.
 
+## The migration timestamp correction (done 28 November 2026)
+
+The migration stamped all 18,657 rebuilt matches with its own build instant,
+`2026-11-28T07:01:29Z`. That put every match inside the 30-day window, so
+`updated_30d_male_all.zip` was 435 MB instead of an incremental delta.
+
+Those 18,657 rows were corrected once in `lake_catalog.sqlite.gz`: `built_at`
+was reset to each match's raw fetch time. The backfill rows, built later by
+`ingest.yml`, were not touched. The 30-day update selection fell from 19,299
+to 730 matches: the 688 backfill builds, 41 migration rows whose raw was
+fetched inside the window, and recent first publications. `built_at` keeps
+its normal meaning from here, so a later `reparse.yml` rebuild still moves it
+and a parser fix remains in the update feed.
+
 ## The legacy raw backfill (done 28 November 2026)
 
 All 691 `legacy_unbacked` matches were fetched once through the standard
