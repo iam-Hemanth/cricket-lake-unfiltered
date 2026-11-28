@@ -36,6 +36,7 @@ import logging
 import shutil
 import sys
 import tarfile
+import zlib
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,7 +48,11 @@ sys.path.insert(0, str(REPO_ROOT))
 from src import catalog_db, release_store, shard_store  # noqa: E402
 from src.builder import PARSER_VERSION, References, build_match  # noqa: E402
 from src.catalog_fields import extract_catalog_metadata  # noqa: E402
-from src.commentary import bundle_sha256, load_raw_match_payloads, raw_payload_files  # noqa: E402
+from src.commentary import (  # noqa: E402
+    bundle_sha256_from_members,
+    load_raw_match_payloads,
+    raw_payload_files,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -263,16 +268,6 @@ def _newest_fetched_at(staged: Dict[str, List[Path]]) -> Dict[str, Path]:
     return chosen
 
 
-def _raw_digest(directory: Optional[Path]) -> Optional[str]:
-    """The full-bundle digest of a match's stored raw payload."""
-    if directory is None:
-        return None
-    directory = Path(directory)
-    if not (directory / "scorecard.json.gz").exists():
-        return None
-    return bundle_sha256(directory)
-
-
 def _substantive_digest(payload: bytes) -> Optional[str]:
     """The digest of a match, ignoring the parser-version label.
 
@@ -363,25 +358,55 @@ def run_merge(args: argparse.Namespace) -> int:
     # memory would need several gigabytes, so each shard is gathered, written
     # and released before the next one is started.
     raw_written = []
+    corrupt_raw: List[str] = []
+    raw_digests: Dict[str, str] = {}
     for index in range(shard_store.NUM_SHARDS):
         members: Dict[str, bytes] = {}
         for match_id, directory in chosen_raw.items():
             if shard_store.shard_id(match_id) != index:
                 continue
+            match_members: Dict[str, bytes] = {}
             for file_path in raw_payload_files(directory):
-                with gzip.open(file_path, "rb") as handle:
-                    members[f"{match_id}/{file_path.name}"] = handle.read()
+                try:
+                    with gzip.open(file_path, "rb") as handle:
+                        payload = handle.read()
+                except (OSError, EOFError, zlib.error) as exc:
+                    # The build succeeded from the readable members, so this
+                    # member is not part of the match. It is already
+                    # unreadable evidence; keep the rest of the bundle rather
+                    # than failing the whole migration on it.
+                    logger.warning(
+                        "Skipping corrupt raw member %s/%s: %s",
+                        match_id, file_path.name, exc,
+                    )
+                    corrupt_raw.append(f"{match_id}/{file_path.name}")
+                    continue
+                match_members[f"{match_id}/{file_path.name}"] = payload
             for name in ("fetch_meta.json", "meta.json"):
                 metadata = directory / name
                 if metadata.exists():
-                    members[f"{match_id}/{name}"] = metadata.read_bytes()
+                    match_members[f"{match_id}/{name}"] = metadata.read_bytes()
+            if f"{match_id}/scorecard.json.gz" not in match_members:
+                logger.warning(
+                    "No readable scorecard for %s; its raw payload is not packed",
+                    match_id,
+                )
+                continue
+            # The digest must describe what the archive actually holds, not a
+            # re-read of the source directory: a corrupt member that was not
+            # packed must not be part of it.
+            raw_digests[match_id] = bundle_sha256_from_members(match_members, match_id)
+            members.update(match_members)
         if not members:
             continue
         name = shard_store.shard_name(shard_store.LAYER_RAW, index)
         shard_store.write_pack(archives_dir / name, shard_store.LAYER_RAW, members)
         raw_written.append(name)
         members.clear()
-    logger.info("Seeded %s raw matches into %s shards", len(chosen_raw), len(raw_written))
+    logger.info(
+        "Seeded %s raw matches into %s shards (%s corrupt members skipped)",
+        len(raw_digests), len(raw_written), len(corrupt_raw),
+    )
 
     # -- the published master --------------------------------------------
     # It tells which rebuilt matches actually changed, so built_at stays
@@ -462,7 +487,7 @@ def run_merge(args: argparse.Namespace) -> int:
             # the build failed, so it is recorded as incomplete. Otherwise it
             # is a published match that never had a raw payload at all.
             directory = chosen_raw.get(match_id)
-            raw_digest = _raw_digest(directory) if directory else None
+            raw_digest = raw_digests.get(match_id)
             fetched = _fetched_at(directory) if directory else None
             first_published = fetched or summary["identity"].get("match_date") or now_text
             if raw_digest:
@@ -514,7 +539,7 @@ def run_merge(args: argparse.Namespace) -> int:
             raw_archive=shard_store.shard_name(
                 shard_store.LAYER_RAW, shard_store.shard_id(match_id)
             ),
-            raw_sha256=_raw_digest(directory),
+            raw_sha256=raw_digests.get(match_id),
             raw_fetched_at=fetched or now_text,
             built_archive=built_archive,
             built_sha256=built_digests[match_id],
@@ -539,6 +564,7 @@ def run_merge(args: argparse.Namespace) -> int:
         "raw_shards": len(raw_written),
         "built_shards": len(built_written),
         "legacy_unbacked": len(legacy_payloads),
+        "corrupt_raw_members": corrupt_raw,
         "catalog_rows": catalog_db.count_matches(connection),
     }
     logger.info("Merge complete: %s", json.dumps(summary))
