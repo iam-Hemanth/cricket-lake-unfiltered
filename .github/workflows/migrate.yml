@@ -65,15 +65,29 @@ jobs:
           python scripts/migrate_to_catalog.py --list-assets > assets_raw.txt
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
+          import re
           text = open("assets_raw.txt").read()
           assets = json.loads(text[text.rindex("\n[") + 1:])
-          names = [a["asset"] for a in assets]
-          print(f"count={len(names)}")
-          print(f"assets={json.dumps(names)}")
+          items = []
+          for asset in assets:
+              slug = re.sub(
+                  r"[^a-z0-9]+",
+                  "-",
+                  f"{asset['repository']}-{asset['release']}-{asset['asset']}".lower(),
+              ).strip("-")
+              items.append({
+                  "key": slug,
+                  "label": f"{asset['asset']} [{asset['repository']}]",
+                  "asset": asset["asset"],
+                  "source_repo": asset["repository"],
+                  "source_release": asset["release"],
+              })
+          print(f"count={len(items)}")
+          print(f"assets={json.dumps(items)}")
           PY
 
   worker:
-    name: Migrate ${{ matrix.asset }}
+    name: Migrate ${{ matrix.label }}
     needs: list
     if: ${{ inputs.worker_asset == '' && !inputs.merge && !inputs.verify }}
     runs-on: ubuntu-latest
@@ -81,7 +95,7 @@ jobs:
       fail-fast: false
       max-parallel: 20
       matrix:
-        asset: ${{ fromJSON(needs.list.outputs.assets) }}
+        include: ${{ fromJSON(needs.list.outputs.assets) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -96,13 +110,13 @@ jobs:
         run: |
           python scripts/migrate_to_catalog.py --worker \
             --batch "$ASSET" \
-            --source-release "${{ inputs.source_release }}" \
-            --source-repo "${{ inputs.source_repo }}" \
+            --source-release "${{ matrix.source_release }}" \
+            --source-repo "${{ matrix.source_repo }}" \
             --workdir migrate_work
       - name: Upload the staged raw payloads and built matches
         uses: actions/upload-artifact@v4
         with:
-          name: migrate-${{ matrix.asset }}
+          name: migrate-${{ matrix.key }}
           path: |
             migrate_work/stage/raw/
             migrate_work/stage/built/
