@@ -584,12 +584,6 @@ def export_matches_index_rows(connection: sqlite3.Connection) -> List[Dict[str, 
                 meta = json.loads(row["index_meta_json"])
             except json.JSONDecodeError:
                 meta = {}
-        # When the source evidence last changed, not when a rebuild ran. A
-        # parser or schema upgrade republishes every match, but only a new
-        # fetch makes a match part of the incremental update feed.
-        content_updated_at = (
-            row["raw_fetched_at"] or row["first_published_at"] or row["built_at"]
-        )
         record = {
             "match_id": row["match_id"],
             "date": row["match_date"],
@@ -607,13 +601,11 @@ def export_matches_index_rows(connection: sqlite3.Connection) -> List[Dict[str, 
             "parser_version": row["parser_version"],
             "first_published_at": row["first_published_at"],
             "built_updated_at": row["built_at"],
-            "content_updated_at": content_updated_at,
         }
         record.update(meta)
         record["validation_status"] = row["validation_tier"]
         record["parser_version"] = row["parser_version"]
         record["first_published_at"] = row["first_published_at"]
         record["built_updated_at"] = row["built_at"]
-        record["content_updated_at"] = content_updated_at
         rows.append(record)
     return rows

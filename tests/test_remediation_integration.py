@@ -406,7 +406,7 @@ class DownloadSlicePackagingTests(unittest.TestCase):
             work = Path(tmp)
             matches_dir = work / "master_matches"
             matches_dir.mkdir()
-            for match_id in ("100", "200", "300", "400"):
+            for match_id in ("100", "200", "300"):
                 result = build_match(
                     match_id, _recent_details(), {1: [ball()]}, References(),
                 )
@@ -424,19 +424,13 @@ class DownloadSlicePackagingTests(unittest.TestCase):
             index.write_text(
                 "match_id,date,format,format_bucket,schema_version,gender,"
                 "competition,team1,team2,international_status,validation_status,"
-                "first_published_at,built_updated_at,content_updated_at\n"
+                "first_published_at,built_updated_at\n"
                 "100,2026-11-28,T20I,T20I,3.3.0,male,IPL,India,Australia,"
-                "international,clean,2026-11-28T00:00:00+00:00,"
-                "2026-11-28T00:00:00+00:00,2026-11-28T00:00:00+00:00\n"
+                "international,clean,2026-11-28T00:00:00+00:00,2026-11-28T00:00:00+00:00\n"
                 "200,2024-01-01,T20I,T20I,3.3.0,male,IPL,India,Australia,"
-                "international,clean,2024-01-01T00:00:00+00:00,"
-                "2026-11-27T00:00:00+00:00,2024-01-01T00:00:00+00:00\n"
+                "international,clean,2024-01-01T00:00:00+00:00,2026-11-27T00:00:00+00:00\n"
                 "300,2026-11-28,T20I,T20I,3.3.0,female,IPL,India,Australia,"
-                "international,clean,2026-11-28T00:00:00+00:00,"
-                "2026-11-28T00:00:00+00:00,2026-11-28T00:00:00+00:00\n"
-                "400,2019-06-01,T20I,T20I,3.3.0,male,IPL,India,Australia,"
-                "international,clean,2019-06-01T00:00:00+00:00,"
-                "2026-11-28T00:00:00+00:00,2026-11-28T00:00:00+00:00\n",
+                "international,clean,2026-11-28T00:00:00+00:00,2026-11-28T00:00:00+00:00\n",
                 encoding="utf-8",
             )
 
@@ -483,7 +477,7 @@ class DownloadSlicePackagingTests(unittest.TestCase):
                 if name.endswith(".json") and Path(name).stem.isdigit()
             }
             self.assertEqual(added_names, {"100.json"})
-            self.assertEqual(updated_names, {"100.json", "400.json"})
+            self.assertEqual(updated_names, {"100.json", "200.json"})
 
 
 class UpdatedSliceTests(unittest.TestCase):

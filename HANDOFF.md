@@ -101,14 +101,6 @@ A match could end up with a different body depending on which archives
 happened to be present. The snapshot is already resolved, so there is no
 ordering to get wrong.
 
-The incremental `updated_*d_*` slices select on `content_updated_at`, which
-is when the source evidence last arrived (`raw_fetched_at`), falling back to
-the first publication. A parser or schema upgrade rebuilds every match but
-does not mean every match has new content. Without this distinction the
-28 November migration would put all 19,300 matches into
-`updated_30d_male_all.zip` (435 MB) instead of the roughly 730 matches whose
-evidence is actually inside the window.
-
 ## The validation tiers
 
 A match's tier is assigned in one pass by `src/validator.py:assess_match()`.
