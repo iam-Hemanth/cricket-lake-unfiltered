@@ -368,6 +368,19 @@ class CatalogDbTests(unittest.TestCase):
         self.assertEqual(rows[0]["validation_status"], "clean")
         self.assertEqual(rows[0]["total_balls"], 120)
 
+    def test_the_update_feed_time_is_the_raw_evidence_time(self):
+        self._seed("100", raw_fetched_at="2026-10-06T00:00:00+00:00",
+                   first_published_at="2026-10-06T00:00:00+00:00",
+                   built_at="2026-11-28T00:00:00+00:00")
+        self._seed("200", first_published_at="2026-05-01T00:00:00+00:00",
+                   built_at="2026-11-28T00:00:00+00:00")
+        rows = {row["match_id"]: row
+                for row in catalog_db.export_matches_index_rows(self.connection)}
+        self.assertEqual(rows["100"]["content_updated_at"],
+                         "2026-10-06T00:00:00+00:00")
+        self.assertEqual(rows["200"]["content_updated_at"],
+                         "2026-05-01T00:00:00+00:00")
+
     def test_a_run_is_recorded(self):
         catalog_db.record_run(self.connection, "run-1", "ingest", summary={"matches": 3})
         row = self.connection.execute("SELECT * FROM runs WHERE run_id='run-1'").fetchone()

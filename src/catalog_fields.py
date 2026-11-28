@@ -25,7 +25,10 @@ CATALOG_FIELDS = [
 ]
 
 #: The catalog-only columns appended to the published index.
-INDEX_CATALOG_FIELDS = ["parser_version", "first_published_at", "built_updated_at"]
+INDEX_CATALOG_FIELDS = [
+    "parser_version", "first_published_at", "built_updated_at",
+    "content_updated_at",
+]
 
 #: Every column of the published index, in order.
 INDEX_FIELDS = CATALOG_FIELDS + INDEX_CATALOG_FIELDS

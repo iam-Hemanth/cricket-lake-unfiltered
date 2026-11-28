@@ -74,11 +74,18 @@ def main() -> int:
         mid = str(row["match_id"])
         first_published = (row.get("first_published_at") or "").strip()
         built_updated = (row.get("built_updated_at") or "").strip()
+        # The update feed follows the source evidence, not the build. A
+        # schema or parser upgrade rebuilds every match; only a new fetch
+        # means the match has new content. Older indexes have no
+        # content_updated_at, so built_updated_at is the fallback there.
+        content_updated = (
+            row.get("content_updated_at") or built_updated or ""
+        ).strip()
         published = first_published or (
             recovery if row.get("schema_version") == "3.3.0" else ""
         )
         updated = max(
-            [value for value in (first_published, built_updated) if value],
+            [value for value in (first_published, content_updated) if value],
             default=published,
         )
         records[mid] = enrich(row, comps, teams, published, updated)
