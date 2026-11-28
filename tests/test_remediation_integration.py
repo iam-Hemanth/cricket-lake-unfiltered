@@ -205,10 +205,11 @@ class IngestLifecycleTests(unittest.TestCase):
             (self.work / raw_archive).read_bytes()
         )
 
-        with mock.patch.object(
-            sys, "argv",
-            ["pipeline_reparse.py", "--workdir", str(self.work), "--match-ids", "100"],
-        ):
+        with mock.patch("urllib.request.urlopen", side_effect=AssertionError("unexpected network call")), \
+                mock.patch.object(
+                    sys, "argv",
+                    ["pipeline_reparse.py", "--workdir", str(self.work), "--match-ids", "100"],
+                ):
             self.assertEqual(pipeline_reparse.main(), 0)
 
         connection = catalog_db.load_catalog_gz(self.work / "lake_catalog.sqlite.gz")
@@ -385,11 +386,12 @@ class WorkflowSummaryTests(unittest.TestCase):
             connection.close()
 
             output = io.StringIO()
-            with mock.patch.object(
-                sys, "argv",
-                ["pipeline_reparse.py", "--workdir", str(work),
-                 "--match-ids", "100", "--dry-run"],
-            ), contextlib.redirect_stdout(output):
+            with mock.patch("urllib.request.urlopen", side_effect=AssertionError("unexpected network call")), \
+                    mock.patch.object(
+                        sys, "argv",
+                        ["pipeline_reparse.py", "--workdir", str(work),
+                         "--match-ids", "100", "--dry-run"],
+                    ), contextlib.redirect_stdout(output):
                 self.assertEqual(pipeline_reparse.main(), 0)
 
         summary = json.loads(output.getvalue())

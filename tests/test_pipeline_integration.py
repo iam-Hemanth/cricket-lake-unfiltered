@@ -278,8 +278,10 @@ class IngestCommitTests(unittest.TestCase):
         import argparse
         import json
         import tempfile
+        from unittest import mock
 
         from scripts.pipeline_ingest import run_commit
+        from src import release_store
 
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)
@@ -334,7 +336,8 @@ class IngestCommitTests(unittest.TestCase):
                 workdir=str(work), repo="example/repo", upload=False,
                 bootstrap=True,
             )
-            self.assertEqual(run_commit(args), 0)
+            with mock.patch.object(release_store, "find_asset", return_value=None):
+                self.assertEqual(run_commit(args), 0)
 
             self.assertTrue((work / "raw_pack_20261127T120000Z.tar.gz").exists())
             self.assertTrue((work / "built_pack_20261127T120000Z.tar.gz").exists())

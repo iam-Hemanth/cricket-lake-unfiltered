@@ -72,7 +72,7 @@ def main() -> int:
     catalog_updated_at = None
     if catalog_path.exists():
         connection = catalog_db.load_catalog_gz(catalog_path)
-        if args.catalog is None:
+        if args.catalog is None and args.upload:
             asset = release_store.find_asset(
                 args.repo, release_store.RELEASE_CATALOG, "lake_catalog.sqlite.gz"
             )
