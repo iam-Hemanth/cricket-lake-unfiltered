@@ -45,7 +45,7 @@ There are four, and only four.
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `ingest.yml` | every 6 hours, or manual | Plans from the catalog, fetches in a 20-slot matrix, stores the raw payloads, builds, commits what changed |
+| `ingest.yml` | every 6 hours, or manual | Plans from the catalog, fetches in a matrix of 4-match chunks (20 chunks at a time), stores the raw payloads, builds, commits what changed |
 | `reparse.yml` | manual | Rebuilds from the stored raw payloads, **with no network access at all** |
 | `publish.yml` | nightly, or manual | Copies the built matches into the published snapshot, builds the master archive, compacts the packs |
 | `ci.yml` | every pull request and push to `main` | The test suite, including the architectural guardrails |
@@ -187,7 +187,7 @@ from coming back.
 - **Release limits.** GitHub Releases allow 1,000 assets per release and
   2 GiB per asset. Pages allows a 1 GB site. The per-match store under `m/`
   is capped at 700 MB.
-- **Scale.** The lake holds roughly 18,700 matches. Past about 40,000 the
+- **Scale.** The lake holds 19,348 matches. Past about 40,000 the
   `m/` store will not fit in the Pages limit, and the calendar will have to
   drop it or move to object storage.
 - **Scope.** The lake's data comes from ESPN only. Do not join another
@@ -208,11 +208,11 @@ The lake was moved behind the catalog on 28 November 2026. What it produced:
 | Catalog | 19,348 rows, 3 MB |
 | Published matches lost | **0 absent**; `1120137` now fails validation on contradictory source data and is not republished |
 
-The catalog holds 19,348 rows: 18,657 have a raw payload and 691 are
-`legacy_unbacked`. Of those, 685 were published matches that were never
-fetched raw; six are rebuilt matches whose only scorecard was corrupt. They
-stay published and a targeted `ingest --match-ids` pass gives them a raw
-payload and turns them into ordinary rows.
+At the end of the migration the catalog held 19,348 rows: 18,657 had a raw
+payload and 691 were `legacy_unbacked` — 685 published matches that were
+never fetched raw, and six rebuilt matches whose only scorecard was corrupt.
+All 691 were backfilled on 28 November; the catalog now has a raw payload
+for every row (see below).
 
 The rebuild reclassified the legacy schema-3.0.0 records: 15,216 `clean`,
 1,288 `warning`, 1,182 `scorecard_only`, 899 `coverage_gap`, 716 `source_gap`
@@ -227,6 +227,40 @@ matches the raw batches held but that had never been published.
 The migration workflow and `scripts/migrate_to_catalog.py` were retired on
 28 November 2026 after this run. All future data work goes through
 `ingest.yml`, `reparse.yml` and `publish.yml`.
+
+## The legacy raw backfill (done 28 November 2026)
+
+All 691 `legacy_unbacked` matches were fetched once through the standard
+`ingest.yml` path with `force_refresh`, in three explicit-id batches: a
+50-match canary, then 323 and 320. Every row now has a raw payload and
+`legacy_unbacked` is zero.
+
+- **No fetch or build failures.** The six corrupt-scorecard matches
+  (`1417822`, `1496587`, `1496589`, `1525655`, `1530204`, `1552777`) were
+  re-fetched successfully and are ordinary raw-backed rows.
+- **Fourteen tier changes, none to `failed`:** `clean` → `coverage_gap` (11),
+  `clean` → `scorecard_only` (1), `clean` → `source_gap` (1), and
+  `source_gap` → `coverage_gap` (1). All remain publishable.
+- **Final tiers (19,348 rows):** 15,203 `clean` · 1,288 `warning` ·
+  1,183 `scorecard_only` · 911 `coverage_gap` · 716 `source_gap` ·
+  47 `failed`. The 47 failed rows stay excluded, so the master has 19,301.
+- **Maturity:** 19,334 `settled`, 10 `settled_incomplete`, 4 `provisional`.
+  The unfinished rows are matches ESPN has not yet given a player of the
+  match; they refresh on the normal schedule.
+
+Three fixes landed while the backfill ran:
+
+1. `build_plan()` chunking used floor division, so a 50-id plan produced
+   three chunks of 16 and silently dropped the last two. Every selected id
+   now reaches exactly one chunk.
+2. `ingest.yml` and `reparse.yml` declared `contents: write` only; the
+   `gh workflow run publish.yml` dispatch needs `actions: write`, and without
+   it the commit step failed with HTTP 403 after its assets were uploaded.
+3. Chunks are now four matches, not twenty, so one slow match cannot hold a
+   worker for forty minutes. The 320-match batch fetched in about nine
+   minutes of worker time (80 chunks over four 20-job waves); the run
+   totalled 16 minutes, the rest being runner contention with a concurrent
+   publish.
 
 ## Where things are
 
