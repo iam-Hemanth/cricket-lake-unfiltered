@@ -481,13 +481,14 @@ def run_merge(args: argparse.Namespace) -> int:
         built_archive = shard_store.shard_name(
             shard_store.LAYER_BUILT, shard_store.shard_id(match_id)
         )
-        if summary["legacy"]:
-            # A published match that was not rebuilt must not disappear. If
-            # its raw payload was staged, the raw layer still holds it; only
-            # the build failed, so it is recorded as incomplete. Otherwise it
-            # is a published match that never had a raw payload at all.
+        raw_digest = raw_digests.get(match_id)
+        if summary["legacy"] or raw_digest is None:
+            # A published match that was not rebuilt, or a rebuilt match
+            # whose raw bundle could not be packed, must not disappear. If
+            # its readable raw payload was packed, the raw layer holds it;
+            # otherwise it is recorded with no raw evidence so the raw
+            # backfill can recover it.
             directory = chosen_raw.get(match_id)
-            raw_digest = raw_digests.get(match_id)
             fetched = _fetched_at(directory) if directory else None
             first_published = fetched or summary["identity"].get("match_date") or now_text
             if raw_digest:
@@ -559,11 +560,11 @@ def run_merge(args: argparse.Namespace) -> int:
     catalog_db.save_catalog_gz(connection, workdir / "lake_catalog.sqlite.gz")
 
     summary = {
-        "raw_matches": len(chosen_raw),
+        "raw_matches": len(raw_digests),
         "built_matches": len(built_digests),
         "raw_shards": len(raw_written),
         "built_shards": len(built_written),
-        "legacy_unbacked": len(legacy_payloads),
+        "legacy_unbacked": len(catalog_db.select_legacy_unbacked(connection)),
         "corrupt_raw_members": corrupt_raw,
         "catalog_rows": catalog_db.count_matches(connection),
     }

@@ -409,6 +409,15 @@ class MigrationPreservesPublishedTests(unittest.TestCase):
         self._stage_raw("100")
         # 300 has a raw payload but no staged build, as when its rebuild fails.
         self._stage_raw("300")
+        # 400 was built, but its only scorecard is corrupt.
+        corrupt_dir = self.work / "stage" / "raw" / "400"
+        corrupt_dir.mkdir()
+        (corrupt_dir / "scorecard.json.gz").write_bytes(b"not a gzip stream")
+        result_400 = build_match("400", _recent_details(), {1: [ball()]}, References())
+        self.assertIsNotNone(result_400.match, result_400.error)
+        (self.work / "stage" / "built" / "400.json").write_text(
+            json.dumps(result_400.match, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         self._write_master({
             "100": json.loads(rebuilt_payload),
             "200": {"match_id": "200", "meta": {"validation_status": "clean"}},
@@ -425,7 +434,7 @@ class MigrationPreservesPublishedTests(unittest.TestCase):
 
         connection = catalog_db.load_catalog_gz(self.work / "lake_catalog.sqlite.gz")
         self.addCleanup(connection.close)
-        self.assertEqual(catalog_db.count_matches(connection), 3)
+        self.assertEqual(catalog_db.count_matches(connection), 4)
 
         rebuilt = catalog_db.get_match(connection, "100")
         self.assertEqual(rebuilt["raw_available"], 1)
@@ -443,6 +452,13 @@ class MigrationPreservesPublishedTests(unittest.TestCase):
         self.assertEqual(failed_build["raw_available"], 1)
         self.assertEqual(failed_build["validation_tier"], "warning")
         self.assertIn("build_failed", failed_build["completeness_gaps_json"])
+
+        unreadable = catalog_db.get_match(connection, "400")
+        self.assertEqual(unreadable["maturity_state"], "legacy_unbacked")
+        self.assertEqual(unreadable["raw_available"], 0)
+        self.assertIn("400.json", shard_store.read_pack(
+            self.work / "archives" / unreadable["built_archive"]
+        ))
 
 
 class WorkflowSummaryTests(unittest.TestCase):

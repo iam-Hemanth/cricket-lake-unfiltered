@@ -151,8 +151,12 @@ jobs:
         run: |
           for asset in migrate_work/archives/raw_shard_*.tar.gz; do
             [ -e "$asset" ] || continue
-            gh release upload lake-raw "$(basename "$asset")" \
-              --repo ${{ github.repository }} --clobber
+            for attempt in 1 2 3; do
+              if gh release upload lake-raw "$asset" \
+                --repo ${{ github.repository }} --clobber; then break; fi
+              if [ "$attempt" -eq 3 ]; then exit 1; fi
+              sleep 15
+            done
           done
       - name: Upload the built shards
         env:
@@ -160,15 +164,23 @@ jobs:
         run: |
           for asset in migrate_work/archives/built_shard_*.tar.gz; do
             [ -e "$asset" ] || continue
-            gh release upload lake-built "$(basename "$asset")" \
-              --repo ${{ github.repository }} --clobber
+            for attempt in 1 2 3; do
+              if gh release upload lake-built "$asset" \
+                --repo ${{ github.repository }} --clobber; then break; fi
+              if [ "$attempt" -eq 3 ]; then exit 1; fi
+              sleep 15
+            done
           done
       - name: Upload the catalog
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload lake-catalog migrate_work/lake_catalog.sqlite.gz \
-            --repo ${{ github.repository }} --clobber
+          for attempt in 1 2 3; do
+            if gh release upload lake-catalog migrate_work/lake_catalog.sqlite.gz \
+              --repo ${{ github.repository }} --clobber; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep 15
+          done
 
   verify:
     name: Verify
