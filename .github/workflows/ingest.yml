@@ -65,6 +65,7 @@ jobs:
           MATCH_IDS: ${{ inputs.match_ids }}
           MAX_MATCHES: ${{ inputs.max_matches || 400 }}
         run: |
+          set -o pipefail
           EXTRA=""
           if [ -n "$FORCE_REFRESH" ]; then EXTRA="$EXTRA --force-refresh"; fi
           if [ -n "$SINCE" ]; then EXTRA="$EXTRA --since $SINCE"; fi
@@ -155,6 +156,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -o pipefail
           python scripts/pipeline_ingest.py --commit \
             --workdir ingest_work \
             --repo ${{ github.repository }} \

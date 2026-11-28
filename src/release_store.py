@@ -21,6 +21,7 @@ import tarfile
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, TypeVar
@@ -215,10 +216,22 @@ def upload_asset(
             )
     if clobber and current is not None:
         delete_asset(repo, release, name)
+        # GitHub's asset deletion is eventually consistent. Uploading the
+        # same name while the old asset is still visible is rejected, so
+        # wait until the name is actually free.
+        for _ in range(10):
+            if find_asset(repo, release, name) is None:
+                break
+            time.sleep(1)
 
     # The upload needs the asset id, which comes from the release itself.
+    # The official endpoint takes the asset name as a query parameter; the
+    # header alone is not enough.
     release_payload = _release(repo, release)
-    url = f"https://uploads.github.com/repos/{repo}/releases/{release_payload['id']}/assets"
+    url = (
+        f"https://uploads.github.com/repos/{repo}/releases/"
+        f"{release_payload['id']}/assets?name={urllib.parse.quote(name)}"
+    )
     payload = source.read_bytes()
     headers = {
         "Content-Type": "application/octet-stream",

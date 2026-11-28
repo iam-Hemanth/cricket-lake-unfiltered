@@ -51,6 +51,7 @@ jobs:
           # the catalog that no longer names them is on the release.
           PRUNE: ${{ (inputs.prune || github.event_name == 'schedule') && '1' || '' }}
         run: |
+          set -o pipefail
           EXTRA=""
           if [ -n "$PRUNE" ]; then EXTRA="$EXTRA --prune"; fi
           python scripts/pipeline_compact.py \
@@ -75,6 +76,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -o pipefail
           python scripts/pipeline_publish.py \
             --workdir publish_work \
             --repo ${{ github.repository }} \
@@ -85,6 +87,7 @@ jobs:
   prepare:
     name: Plan the download slices
     needs: publish
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -140,6 +143,7 @@ jobs:
   build:
     name: Build slice shard ${{ matrix.shard }}
     needs: prepare
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -200,6 +204,7 @@ jobs:
   catalog:
     name: Build the catalog page
     needs: [prepare, build]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -274,6 +279,7 @@ jobs:
   pages:
     name: Deploy the catalog
     needs: catalog
+    if: ${{ !cancelled() && needs.catalog.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -299,6 +305,7 @@ jobs:
   prune:
     name: Prune stale slices
     needs: pages
+    if: ${{ !cancelled() && needs.pages.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
